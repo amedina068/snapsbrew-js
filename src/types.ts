@@ -246,8 +246,8 @@ export interface Screenshot {
 	id: string;
 	/** The page that the server captured. */
 	url: string;
-	/** The URL of the image. An empty string when the server stored no image. */
-	image_url: string;
+	/** The URL of the image. `null` when the server stored no image. */
+	image_url: string | null;
 	width: number;
 	height: number;
 	created_at: Timestamp;
@@ -259,29 +259,32 @@ export interface ScreenshotListItem {
 	uuid: string;
 	/** The page that the server captured. */
 	url: string;
-	/** The URL of the image. An empty string when the server stored no image. */
-	image_url: string;
+	/** The URL of the image. `null` when the server stored no image. */
+	image_url: string | null;
 	width: number;
 	height: number;
 	created_at: Timestamp;
 }
 
-/** One image in the media library. */
+/**
+ * One image in the media library. The upload and the list return these
+ * fields and no other field.
+ */
 export interface Media {
 	id: number;
 	uuid: string | null;
+	/** The file name without the extension. */
 	name: string;
+	/** The stored file name. */
 	file_name: string;
 	mime_type: string | null;
+	/** The file size in bytes. */
 	size: number;
-	collection_name: string;
+	/** The URL of the original file. */
+	original_url: string;
 	/** The URL to use as an `image_url` variant. */
 	src: string;
-	original_url: string;
-	preview_url: string;
 	created_at: Timestamp;
-	updated_at: Timestamp;
-	[field: string]: unknown;
 }
 
 /** One page of `GET /v1/media`, in the Laravel paginator format. */

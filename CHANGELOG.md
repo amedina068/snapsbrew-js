@@ -27,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
 - A failed `snaps.create()` gets a 500 with the code `internal_error` and no exception message. The `ServerError` keeps the message, the `apiCode` and the `requestId`.
 - `Template.size` and `TemplateWriteResult.size` can be `null`.
 - `LayerDefinition.type` is optional.
+- `Media` has the nine fields that the server returns: `id`, `uuid`, `name`, `file_name`, `mime_type`, `size`, `original_url`, `src` and `created_at`. The type has no index signature. The server no longer sends `collection_name`, `preview_url`, `updated_at` or the internal fields of the media record.
+- `Screenshot.image_url` and `ScreenshotListItem.image_url` are `string | null`. The value is `null`, not an empty string, when the server stored no image.
+- A failed `batches.create()` gets a 500 with the code `internal_error`, the same as `snaps.create()`. The `ServerError` keeps the message, the `apiCode` and the `requestId`.
 
 ### Fixed
 

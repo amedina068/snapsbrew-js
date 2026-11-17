@@ -199,7 +199,7 @@ The `apiCode` of a `ConflictError` tells you the cause. The type `ConflictCode` 
 
 For each 409, the server created nothing and charged no credit.
 
-If `snaps.create()` fails on the server, the SDK throws a `ServerError` with the `apiCode` `internal_error`. The message does not show the cause. Give the `requestId` to support.
+If `snaps.create()` or `batches.create()` fails on the server, the SDK throws a `ServerError` with the `apiCode` `internal_error`. The message does not show the cause. Give the `requestId` to support.
 
 Use `instanceof`, or use `isSnapsbrewError()` and a `switch` on `code`. The `switch` narrows the type:
 

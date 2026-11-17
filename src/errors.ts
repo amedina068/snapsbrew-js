@@ -143,8 +143,8 @@ export class RateLimitError extends ApiError {
 }
 
 /**
- * 5xx: the server failed. A failed `POST /v1/snaps` has the `apiCode`
- * `internal_error`. Give the `requestId` to support.
+ * 5xx: the server failed. A failed `POST /v1/snaps` or `POST /v1/snaps/batches`
+ * has the `apiCode` `internal_error`. Give the `requestId` to support.
  */
 export class ServerError extends ApiError {
 	override readonly code = "server_error" as const;

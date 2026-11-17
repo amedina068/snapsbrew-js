@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { Media, Screenshot, ScreenshotListItem } from "../src/index";
+import { ServerError } from "../src/index";
 import { callOf, client, html, json, mockFetch } from "./helpers";
 
 const TEMPLATE_ID = "141e8454-8aa1-420a-bd0b-18a85ba949a2";
@@ -459,6 +461,29 @@ describe("batches", () => {
 		});
 	});
 
+	it("create() gives a ServerError with internal_error on a 500", async () => {
+		const body = {
+			message:
+				"The server could not create the batch. Try again later. If the error continues, contact support and give the X-Request-Uuid header of this response.",
+			code: "internal_error",
+		};
+		const fetch = mockFetch(json(500, body, { "x-request-uuid": "req-batch" }));
+
+		const error = await client(fetch)
+			.batches.create({ templateId: TEMPLATE_ID, items: [{ variants: [] }] })
+			.catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(ServerError);
+		expect(error).toMatchObject({
+			code: "server_error",
+			status: 500,
+			apiCode: "internal_error",
+			message: body.message,
+			requestId: "req-batch",
+		});
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
 	it("get() reads the batch and its items", async () => {
 		const result = { ...BATCH, items: [] };
 		const fetch = mockFetch(json(200, result));
@@ -559,6 +584,29 @@ describe("screenshots", () => {
 		expect(await client(fetch).screenshots.get("a1b2c3")).toEqual(screenshot);
 	});
 
+	it("get() and create() give a null image_url when there is no image", async () => {
+		const empty = { ...screenshot, image_url: null };
+		const fetch = mockFetch(
+			json(200, { data: empty }),
+			json(200, { data: empty }),
+		);
+
+		const read = await client(fetch).screenshots.get("a1b2c3");
+		const created = await client(fetch).screenshots.create({
+			url: "https://example.com",
+		});
+
+		expect(read.image_url).toBeNull();
+		expect(created.image_url).toBeNull();
+	});
+
+	it("types image_url as string or null", () => {
+		expectTypeOf<Screenshot["image_url"]>().toEqualTypeOf<string | null>();
+		expectTypeOf<ScreenshotListItem["image_url"]>().toEqualTypeOf<
+			string | null
+		>();
+	});
+
 	// GET /v1/screenshots names the id `uuid` and reads `image_url` from the
 	// media library, the same as the read and the create.
 	const listItem = (uuid: string) => ({
@@ -606,14 +654,48 @@ describe("screenshots", () => {
 		]);
 		expect(callOf(fetch, 1).url.searchParams.get("cursor")).toBe("eyJpZCI6MX0");
 	});
+
+	it("list() gives a null image_url when there is no image", async () => {
+		const fetch = mockFetch(
+			json(200, {
+				data: [{ ...listItem("a1b2c3"), image_url: null }],
+				meta: { previous_cursor: null, next_cursor: null },
+			}),
+		);
+
+		const result = await client(fetch).screenshots.list();
+
+		expect(result.data[0]?.image_url).toBeNull();
+	});
 });
 
 describe("media", () => {
-	const media = {
+	// The exact body of POST /v1/media and of each item of GET /v1/media.
+	const media: Media = {
 		id: 12,
+		uuid: "5b0c7a52-3f9e-4a8d-9c1e-2d7f6b4e8a10",
+		name: "logo",
 		file_name: "logo.png",
-		src: "https://snapsbrew.test/storage/12/logo-image.jpg",
+		mime_type: "image/png",
+		size: 20480,
+		original_url: "https://snapsbrew.test/storage/12/logo.png",
+		src: "https://snapsbrew.test/storage/12/conversions/logo-image.jpg",
+		created_at: "2026-05-01T12:00:00.000000Z",
 	};
+
+	it("types Media with the nine documented fields only", () => {
+		expectTypeOf<keyof Media>().toEqualTypeOf<
+			| "id"
+			| "uuid"
+			| "name"
+			| "file_name"
+			| "mime_type"
+			| "size"
+			| "original_url"
+			| "src"
+			| "created_at"
+		>();
+	});
 
 	it("upload() sends multipart form data", async () => {
 		const fetch = mockFetch(json(200, media));
@@ -660,6 +742,7 @@ describe("media", () => {
 		const page = await client(fetch).media.list({ page: 2 });
 
 		expect(page.current_page).toBe(2);
+		expect(page.data).toEqual([media]);
 		expect(callOf(fetch).url.search).toBe("?page=2");
 	});
 });
