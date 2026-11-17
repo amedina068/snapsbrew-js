@@ -6,6 +6,7 @@ export {
 	type ApiErrorCode,
 	AuthenticationError,
 	AuthorizationError,
+	type ConflictCode,
 	ConflictError,
 	ConnectionError,
 	isSnapsbrewError,

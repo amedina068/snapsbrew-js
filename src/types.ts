@@ -122,8 +122,8 @@ export interface TemplateListItem {
 
 /** `GET /v1/templates/{uuid}`: one template with its publish state. */
 export interface Template extends TemplateListItem {
-	/** The canvas size preset, or `custom`. */
-	size: string;
+	/** The canvas size preset, or `custom`. `null` for an old template with no preset. */
+	size: string | null;
 	/** The version that snaps render. `null` until the first publish. */
 	published_version: number | null;
 	/** `true` when the draft is not the same as the published version. */
@@ -134,7 +134,8 @@ export interface Template extends TemplateListItem {
 export interface TemplateWriteResult {
 	uuid: string;
 	title: string;
-	size: string;
+	/** The canvas size preset, or `custom`. `null` for an old template with no preset. */
+	size: string | null;
 	width: number;
 	height: number;
 	created_at: Timestamp;
@@ -161,8 +162,11 @@ export interface SizePreset {
 
 /** A layer definition for a template write. `GET /v1/guides/layers` gives the vocabulary. */
 export interface LayerDefinition {
+	/** The unique layer key. A variant uses it as `layer`. */
 	key: string;
-	type: string;
+	/** The editor layer type, for example `text`, `image`, `qr_code`, `barcode` or `empty`. */
+	type?: string;
+	/** The design-time properties. Send `[]` for none. */
 	properties: Array<{ name: string; value: unknown }>;
 	[property: string]: unknown;
 }
@@ -240,7 +244,9 @@ export interface BatchWithItems extends Batch {
 /** `GET /v1/screenshots/{uuid}` and `POST /v1/screenshots`. */
 export interface Screenshot {
 	id: string;
+	/** The page that the server captured. */
 	url: string;
+	/** The URL of the image. An empty string when the server stored no image. */
 	image_url: string;
 	width: number;
 	height: number;
@@ -249,8 +255,11 @@ export interface Screenshot {
 
 /** One screenshot in `GET /v1/screenshots`. The list names the id `uuid`. */
 export interface ScreenshotListItem {
+	/** The same value as `id` in `Screenshot`. */
 	uuid: string;
+	/** The page that the server captured. */
 	url: string;
+	/** The URL of the image. An empty string when the server stored no image. */
 	image_url: string;
 	width: number;
 	height: number;

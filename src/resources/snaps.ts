@@ -31,7 +31,8 @@ export type CreateSnapParams = SnapCommon & {
 	/**
 	 * A key for a safe retry. The server keeps the key for 24 hours. A repeat
 	 * with the same key returns the first snap and renders nothing. With a
-	 * key, the SDK also retries the call after a server error or a timeout.
+	 * key, the SDK also retries the call after a server error, a timeout, or
+	 * a 409 `idempotency_key_in_progress`. Do not use a key of a batch.
 	 */
 	idempotencyKey?: string;
 };
@@ -95,7 +96,7 @@ export class Snaps {
 					webhook_url: params.webhookUrl,
 					idempotency_key: params.idempotencyKey,
 				},
-				idempotent: params.idempotencyKey !== undefined,
+				keyed: params.idempotencyKey !== undefined,
 			},
 			options,
 		);
@@ -139,7 +140,10 @@ export type CreateBatchParams = {
 	title?: string;
 	/** The server posts one request to this URL when the batch is complete. */
 	webhookUrl?: string;
-	/** A key for a safe retry. See `CreateSnapParams.idempotencyKey`. */
+	/**
+	 * A key for a safe retry. See `CreateSnapParams.idempotencyKey`. Do not
+	 * use a key of a single snap.
+	 */
 	idempotencyKey?: string;
 } & OutputOptions;
 
@@ -182,7 +186,7 @@ export class Batches {
 					transparent: params.transparent,
 					idempotency_key: params.idempotencyKey,
 				},
-				idempotent: params.idempotencyKey !== undefined,
+				keyed: params.idempotencyKey !== undefined,
 			},
 			options,
 		);

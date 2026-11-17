@@ -138,13 +138,44 @@ describe("HTTP errors", () => {
 		});
 	});
 
-	it("gives the Retry-After value of a 429", async () => {
+	it("gives the Retry-After value and the limit of a 429", async () => {
 		const error = await errorFor(
-			json(429, { message: "Too Many Attempts." }, { "retry-after": "17" }),
+			json(
+				429,
+				{ message: "Too Many Attempts." },
+				{
+					"retry-after": "17",
+					"x-ratelimit-limit": "10",
+					"x-ratelimit-remaining": "0",
+				},
+			),
 		);
 
-		expect((error as RateLimitError).retryAfter).toBe(17);
+		expect(error).toMatchObject({ retryAfter: 17, limit: 10 });
 	});
+
+	it("gives no limit when the 429 has no X-RateLimit-Limit header", async () => {
+		const error = await errorFor(json(429, { message: "Too Many Attempts." }));
+
+		expect((error as RateLimitError).limit).toBeUndefined();
+	});
+
+	for (const code of [
+		"idempotency_key_in_progress",
+		"idempotency_key_belongs_to_snap",
+		"idempotency_key_belongs_to_batch",
+		"legacy_edit_rejected_for_v2",
+	] as const) {
+		it(`reads the 409 code ${code}`, async () => {
+			const error = await errorFor(
+				json(409, { message: "The key cannot be used.", code }),
+			);
+
+			expect(error).toBeInstanceOf(ConflictError);
+			expect(error).toMatchObject({ code: "conflict", apiCode: code });
+			expect((error as ConflictError).currentRevision).toBeUndefined();
+		});
+	}
 
 	it("keeps a body that is not JSON", async () => {
 		const error = await errorFor(
@@ -178,6 +209,54 @@ describe("HTTP errors", () => {
 
 		expect(JSON.stringify(error)).not.toContain("test-token");
 		expect(String(error)).not.toContain("test-token");
+	});
+});
+
+describe("errors of POST /v1/snaps", () => {
+	async function createError(response: Response): Promise<unknown> {
+		const sb = client(mockFetch(response), { maxRetries: 0 });
+
+		return sb.snaps.create({ templateId: "t-1" }).then(
+			() => {
+				throw new Error("The call did not fail.");
+			},
+			(error: unknown) => error,
+		);
+	}
+
+	it("maps a refused permission (403) to AuthorizationError", async () => {
+		const error = await createError(
+			json(
+				403,
+				{ message: "This action is unauthorized." },
+				{ "x-request-uuid": "req-403" },
+			),
+		);
+
+		expect(error).toBeInstanceOf(AuthorizationError);
+		expect(error).not.toBeInstanceOf(AuthenticationError);
+		expect(error).toMatchObject({
+			code: "authorization_error",
+			status: 403,
+			message: "This action is unauthorized.",
+			requestId: "req-403",
+		});
+	});
+
+	it("maps the generic 500 body to ServerError", async () => {
+		const error = await createError(
+			json(500, {
+				message: "The server could not create the snap. Try again later.",
+				code: "internal_error",
+			}),
+		);
+
+		expect(error).toBeInstanceOf(ServerError);
+		expect(error).toMatchObject({
+			code: "server_error",
+			apiCode: "internal_error",
+			message: "The server could not create the snap. Try again later.",
+		});
 	});
 });
 

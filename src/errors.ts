@@ -57,7 +57,10 @@ export class AuthenticationError extends ApiError {
 	override name = "AuthenticationError";
 }
 
-/** 403: the token cannot do this action, for example because it has no `api_requests` ability. */
+/**
+ * 403: the token cannot do this action. The token has no `api_requests`
+ * ability, or a permission check refused the request.
+ */
 export class AuthorizationError extends ApiError {
 	override readonly code = "authorization_error" as const;
 	override name = "AuthorizationError";
@@ -70,12 +73,33 @@ export class NotFoundError extends ApiError {
 }
 
 /**
- * 409: the request conflicts with the current state. An idempotency key is in
- * use, or the revision of an editor document moved.
+ * The `code` field of a 409 body. A new server version can send a code that is
+ * not in this list.
+ *
+ * - `idempotency_key_in_progress`: another request holds the idempotency key.
+ *   A repeat with the same key is safe. The SDK retries it.
+ * - `idempotency_key_belongs_to_snap`: a single snap owns the key. Send a new key.
+ * - `idempotency_key_belongs_to_batch`: a batch owns the key. Send a new key.
+ * - `editor_document_conflict`: the revision of the editor document moved.
+ * - `legacy_edit_rejected_for_v2`: the template uses the v2 editor document.
+ *   Use `documents` to change it.
+ */
+export type ConflictCode =
+	| "idempotency_key_in_progress"
+	| "idempotency_key_belongs_to_snap"
+	| "idempotency_key_belongs_to_batch"
+	| "editor_document_conflict"
+	| "legacy_edit_rejected_for_v2";
+
+/**
+ * 409: the request conflicts with the current state. Read `apiCode` to know
+ * the cause. The server created nothing.
  */
 export class ConflictError extends ApiError {
 	override readonly code = "conflict" as const;
 	override name = "ConflictError";
+	/** The `code` field of the body. See `ConflictCode`. */
+	declare readonly apiCode: ConflictCode | (string & {}) | undefined;
 	/** The stored revision, when an editor document write conflicts. */
 	readonly currentRevision: number | undefined;
 
@@ -105,14 +129,23 @@ export class RateLimitError extends ApiError {
 	override name = "RateLimitError";
 	/** The number of seconds from the `Retry-After` header, when the server sent it. */
 	readonly retryAfter: number | undefined;
+	/**
+	 * The number of requests in one minute that the exceeded limit allows,
+	 * from the `X-RateLimit-Limit` header. A preview has a limit of 10.
+	 */
+	readonly limit: number | undefined;
 
 	constructor(status: number, body: unknown, headers: Headers) {
 		super(status, body, headers);
 		this.retryAfter = parseRetryAfter(headers.get("retry-after"));
+		this.limit = parseCount(headers.get("x-ratelimit-limit"));
 	}
 }
 
-/** 5xx: the server failed. */
+/**
+ * 5xx: the server failed. A failed `POST /v1/snaps` has the `apiCode`
+ * `internal_error`. Give the `requestId` to support.
+ */
 export class ServerError extends ApiError {
 	override readonly code = "server_error" as const;
 	override name = "ServerError";
@@ -184,6 +217,14 @@ export function parseRetryAfter(
 	const date = Date.parse(trimmed);
 
 	return Number.isNaN(date) ? undefined : Math.max(0, (date - now) / 1000);
+}
+
+function parseCount(value: string | null): number | undefined {
+	const trimmed = value?.trim();
+
+	return trimmed !== undefined && /^\d+$/.test(trimmed)
+		? Number(trimmed)
+		: undefined;
 }
 
 // The codes that a runtime gives when the connection never opened. Node

@@ -559,17 +559,52 @@ describe("screenshots", () => {
 		expect(await client(fetch).screenshots.get("a1b2c3")).toEqual(screenshot);
 	});
 
-	it("list() reads one page", async () => {
+	// GET /v1/screenshots names the id `uuid` and reads `image_url` from the
+	// media library, the same as the read and the create.
+	const listItem = (uuid: string) => ({
+		uuid,
+		url: "https://example.com",
+		image_url: `https://snapsbrew.test/storage/screenshots/${uuid}.png`,
+		width: 1330,
+		height: 780,
+		created_at: "2026-05-01T12:00:00.000000Z",
+	});
+
+	it("list() reads one page with the image URL of each item", async () => {
 		const page = {
-			data: [{ ...screenshot, id: undefined, uuid: "a1b2c3" }],
+			data: [listItem("a1b2c3")],
 			meta: { previous_cursor: null, next_cursor: null },
 		};
 		const fetch = mockFetch(json(200, page));
 
-		expect((await client(fetch).screenshots.list()).data[0]?.uuid).toBe(
-			"a1b2c3",
+		const result = await client(fetch).screenshots.list();
+
+		expect(result).toEqual(page);
+		expect(result.data[0]?.image_url).toBe(
+			"https://snapsbrew.test/storage/screenshots/a1b2c3.png",
 		);
 		expect(callOf(fetch).url.search).toBe("");
+	});
+
+	it("list() follows next_cursor to the next page", async () => {
+		const fetch = mockFetch(
+			json(200, {
+				data: [listItem("a1b2c3")],
+				meta: { previous_cursor: null, next_cursor: "eyJpZCI6MX0" },
+			}),
+			json(200, {
+				data: [listItem("d4e5f6")],
+				meta: { previous_cursor: "eyJpZCI6Mn0", next_cursor: null },
+			}),
+		);
+
+		const items = await client(fetch).screenshots.list().toArray();
+
+		expect(items.map((item) => item.image_url)).toEqual([
+			"https://snapsbrew.test/storage/screenshots/a1b2c3.png",
+			"https://snapsbrew.test/storage/screenshots/d4e5f6.png",
+		]);
+		expect(callOf(fetch, 1).url.searchParams.get("cursor")).toBe("eyJpZCI6MX0");
 	});
 });
 

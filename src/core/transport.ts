@@ -1,5 +1,6 @@
 import {
 	type ApiError,
+	ConflictError,
 	ConnectionError,
 	createApiError,
 	RateLimitError,
@@ -44,9 +45,15 @@ export interface RequestSpec {
 	form?: FormData;
 	/**
 	 * `true` when a repeat of the request has no extra effect. The default
-	 * is `true` for GET, PUT and DELETE, and `false` for POST and PATCH.
+	 * is `true` for GET, PUT and DELETE, and for a request with `keyed`. It is
+	 * `false` for other POST and PATCH requests.
 	 */
 	idempotent?: boolean;
+	/**
+	 * `true` when the body has an `idempotency_key`. Then the SDK also retries
+	 * a 409 with the code `idempotency_key_in_progress`.
+	 */
+	keyed?: boolean;
 	/** Read the body as text, not as JSON. */
 	text?: boolean;
 }
@@ -88,7 +95,12 @@ export class Transport {
 		const url = this.#url(spec);
 		const init = this.#init(spec);
 		const maxRetries = options.maxRetries ?? this.#maxRetries;
-		const idempotent = spec.idempotent ?? IDEMPOTENT_METHODS.has(spec.method);
+		const policy: RetryPolicy = {
+			idempotent:
+				spec.idempotent ??
+				(spec.keyed === true || IDEMPOTENT_METHODS.has(spec.method)),
+			keyed: spec.keyed === true,
+		};
 
 		for (let attempt = 0; ; attempt++) {
 			let failure: SnapsbrewError;
@@ -104,9 +116,7 @@ export class Transport {
 			}
 
 			const delay =
-				attempt < maxRetries
-					? retryDelay(failure, attempt, idempotent)
-					: undefined;
+				attempt < maxRetries ? retryDelay(failure, attempt, policy) : undefined;
 
 			if (delay === undefined) {
 				throw failure;
@@ -210,23 +220,37 @@ export class Transport {
 	}
 }
 
+/** The facts about one request that decide a retry. */
+export interface RetryPolicy {
+	/** A repeat of the request has no extra effect. */
+	idempotent: boolean;
+	/** The request has an idempotency key. */
+	keyed: boolean;
+}
+
 /**
  * Returns the delay before the next attempt, or `undefined` when the SDK must
  * not retry. A request that is not idempotent gets a retry only when the
- * server did not process it: a 429, or a connection that never opened.
+ * server did not process it: a 429, or a connection that never opened. A
+ * request with an idempotency key also gets a retry on a 409
+ * `idempotency_key_in_progress`, because the server created nothing.
  */
 export function retryDelay(
 	failure: SnapsbrewError,
 	attempt: number,
-	idempotent: boolean,
+	policy: RetryPolicy,
 	random: () => number = Math.random,
 ): number | undefined {
+	const { idempotent, keyed } = policy;
 	const retryable =
 		failure instanceof RateLimitError ||
 		(failure instanceof ConnectionError &&
 			(idempotent || failure.beforeSend)) ||
 		(idempotent &&
-			(failure instanceof ServerError || failure.code === "timeout"));
+			(failure instanceof ServerError || failure.code === "timeout")) ||
+		(keyed &&
+			failure instanceof ConflictError &&
+			failure.apiCode === "idempotency_key_in_progress");
 
 	if (!retryable) {
 		return undefined;
