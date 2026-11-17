@@ -1,0 +1,64 @@
+{
+	"name": "snapsbrew",
+	"version": "0.1.0",
+	"description": "TypeScript client for a self-hosted Snapsbrew instance. One package for Node, Bun, Deno and Cloudflare Workers.",
+	"keywords": [
+		"snapsbrew",
+		"image-generation",
+		"og-image",
+		"signed-url",
+		"templates",
+		"sdk"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/amedina068/snapsbrew-js.git"
+	},
+	"bugs": "https://github.com/amedina068/snapsbrew-js/issues",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.cts",
+	"files": [
+		"dist"
+	],
+	"sideEffects": false,
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p test",
+		"lint": "biome check --vcs-enabled=true --vcs-client-kind=git --vcs-use-ignore-file=true .",
+		"format": "biome check --vcs-enabled=true --vcs-client-kind=git --vcs-use-ignore-file=true --write .",
+		"check:package": "publint --strict && attw --pack .",
+		"smoke:node": "node smoke/esm.mjs && node smoke/cjs.cjs",
+		"smoke:bun": "bun smoke/esm.mjs",
+		"smoke:deno": "deno run --allow-read smoke/esm.mjs",
+		"prepublishOnly": "npm run build && npm run check:package"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.5",
+		"@biomejs/biome": "^2.6.8",
+		"@types/node": "^20.19.43",
+		"publint": "^0.3.25",
+		"tsdown": "^0.23.7",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.12"
+	}
+}

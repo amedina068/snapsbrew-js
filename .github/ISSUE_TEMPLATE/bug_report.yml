@@ -1,0 +1,44 @@
+name: Bug report
+description: Tell us about an error in the SDK.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not put a token, a signing key or other secret in this form.
+        To report a security problem, read SECURITY.md. Do not use this form.
+  - type: input
+    id: version
+    attributes:
+      label: SDK version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and version
+      placeholder: Node.js 22.11, Bun 1.4, Deno 2.9 or Cloudflare Workers
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest code that shows the error.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Give the error message, the `code` and the `requestId` of the error, if the SDK gives them.
+    validations:
+      required: true

@@ -1,0 +1,44 @@
+# Publishes the package to npm. This workflow runs only when a maintainer
+# starts it by hand. It does not run on a push or a tag.
+#
+# Before the first release:
+# 1. Choose a license, add the LICENSE file and set `license` in package.json.
+# 2. Add the repository secret NPM_TOKEN (an npm automation token).
+# 3. Start this workflow from the Actions tab. Leave "dry-run" on for a test.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Pack the package, but do not publish it.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - name: Stop when there is no license
+        run: node -e "if (!require('./package.json').license) { console.error('Set a license in package.json first.'); process.exit(1) }"
+      - name: Publish
+        run: npm publish --provenance --access public ${{ inputs.dry-run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
