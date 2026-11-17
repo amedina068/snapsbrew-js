@@ -16,3 +16,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
 - Retries with exponential backoff and jitter. The SDK obeys `Retry-After` and does not retry a request that is not idempotent.
 - `AbortSignal` support on each call.
 - ESM and CommonJS builds with types for both.
+- `ConflictCode` type for the `apiCode` of a `ConflictError`: `idempotency_key_in_progress`, `idempotency_key_belongs_to_snap`, `idempotency_key_belongs_to_batch`, `editor_document_conflict` and `legacy_edit_rejected_for_v2`.
+- The SDK retries a 409 `idempotency_key_in_progress` with the normal backoff when the request has an idempotency key. The SDK does not retry the other 409 codes.
+- `RateLimitError.limit` gives the value of the `X-RateLimit-Limit` header.
+- The README lists the rate limits of the API.
+
+### Changed
+
+- `snaps.create()` gets a 403, not a 401, when a permission check refuses the request. The SDK throws an `AuthorizationError` for it.
+- A failed `snaps.create()` gets a 500 with the code `internal_error` and no exception message. The `ServerError` keeps the message, the `apiCode` and the `requestId`.
+- `Template.size` and `TemplateWriteResult.size` can be `null`.
+- `LayerDefinition.type` is optional.
+
+### Fixed
+
+- `screenshots.list()` reads the `image_url` of each item. The server sent a wrong value before.

@@ -175,17 +175,31 @@ Each error that the SDK throws extends `SnapsbrewError` and has a `code`.
 | Class                 | `code`                 | Cause                                                                           |
 | --------------------- | ---------------------- | ------------------------------------------------------------------------------- |
 | `AuthenticationError` | `authentication_error` | 401: the token is missing or not valid.                                         |
-| `AuthorizationError`  | `authorization_error`  | 403: the token cannot do this action.                                           |
+| `AuthorizationError`  | `authorization_error`  | 403: the token cannot do this action, or a permission check refused it.         |
 | `NotFoundError`       | `not_found`            | 404: the resource is not in your company.                                       |
-| `ConflictError`       | `conflict`             | 409: an idempotency key is in use, or the revision of a document moved.         |
+| `ConflictError`       | `conflict`             | 409: the request conflicts with the current state. Read `apiCode`.              |
 | `ValidationError`     | `validation_error`     | 422: the server rejected a field. Read `errors` for the messages of each field. |
-| `RateLimitError`      | `rate_limit`           | 429: too many requests. Read `retryAfter` for the seconds to wait.              |
+| `RateLimitError`      | `rate_limit`           | 429: too many requests. Read `retryAfter` and `limit`.                          |
 | `ServerError`         | `server_error`         | 5xx: the server failed.                                                         |
 | `ApiError`            | `api_error`            | Another error status. Each class above extends `ApiError`.                      |
 | `ConnectionError`     | `connection_error`     | The request did not get a response.                                             |
 | `TimeoutError`        | `timeout`              | One attempt took more time than `timeout`.                                      |
 
-Each `ApiError` has `status`, `body`, `headers` and `requestId`. Give the `requestId` to support.
+Each `ApiError` has `status`, `body`, `headers`, `requestId` and `apiCode`. `apiCode` is the `code` field of the body, when the body has one. Give the `requestId` to support.
+
+The `apiCode` of a `ConflictError` tells you the cause. The type `ConflictCode` lists the known values:
+
+| `apiCode`                          | Cause                                                        | What to do                                                   |
+| ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `idempotency_key_in_progress`      | Another request with the same idempotency key is running.    | Send the request again with the same key. The SDK does this. |
+| `idempotency_key_belongs_to_snap`  | A single snap owns the key. The call was `batches.create()`. | Send a new key.                                              |
+| `idempotency_key_belongs_to_batch` | A batch owns the key. The call was `snaps.create()`.         | Send a new key.                                              |
+| `editor_document_conflict`         | The revision of the editor document moved.                   | Read the document again. `currentRevision` has the revision. |
+| `legacy_edit_rejected_for_v2`      | The template uses the v2 editor document.                    | Use `sb.documents` to change the template.                   |
+
+For each 409, the server created nothing and charged no credit.
+
+If `snaps.create()` fails on the server, the SDK throws a `ServerError` with the `apiCode` `internal_error`. The message does not show the cause. Give the `requestId` to support.
 
 Use `instanceof`, or use `isSnapsbrewError()` and a `switch` on `code`. The `switch` narrows the type:
 
@@ -204,6 +218,11 @@ try {
 		case "rate_limit":
 			console.error(`Wait ${error.retryAfter} seconds.`);
 			break;
+		case "conflict":
+			if (error.apiCode === "idempotency_key_belongs_to_batch") {
+				// Send the request again with a new idempotency key.
+			}
+			break;
 		default:
 			throw error;
 	}
@@ -216,13 +235,14 @@ If you abort a call with your own `AbortSignal`, the SDK throws the reason of th
 
 The SDK retries a failed call up to `maxRetries` times. The delay doubles on each attempt: 0.5, 1, 2, 4 and 8 seconds at most. Half of each delay is random (jitter). If the server sends `Retry-After`, the SDK waits that time. If `Retry-After` is more than 60 seconds, the SDK does not retry and throws a `RateLimitError`.
 
-| Failure                       | Retry of GET, PUT, DELETE | Retry of POST, PATCH                                         |
-| ----------------------------- | ------------------------- | ------------------------------------------------------------ |
-| 429                           | Yes                       | Yes. The server rejected the request before it did the work. |
-| 5xx                           | Yes                       | Only with an `idempotencyKey`                                |
-| Timeout                       | Yes                       | Only with an `idempotencyKey`                                |
-| Connection refused, DNS error | Yes                       | Yes. The server did not get the request.                     |
-| Other connection error        | Yes                       | Only with an `idempotencyKey`                                |
+| Failure                           | Retry of GET, PUT, DELETE | Retry of POST, PATCH                                         |
+| --------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| 429                               | Yes                       | Yes. The server rejected the request before it did the work. |
+| 409 `idempotency_key_in_progress` | Not applicable            | Only with an `idempotencyKey`. The server created nothing.   |
+| 5xx                               | Yes                       | Only with an `idempotencyKey`                                |
+| Timeout                           | Yes                       | Only with an `idempotencyKey`                                |
+| Connection refused, DNS error     | Yes                       | Yes. The server did not get the request.                     |
+| Other connection error            | Yes                       | Only with an `idempotencyKey`                                |
 
 A render costs a credit. To retry a render safely, send an idempotency key:
 
@@ -234,7 +254,19 @@ await sb.snaps.create({
 });
 ```
 
-The server keeps a key for 24 hours. A repeat with the same key returns the first snap and renders nothing. The SDK also retries `batches.cancel()` and `templates.publish()`, because a repeat of these calls changes nothing. The SDK does not retry a write to an editor document, because a repeat gets a conflict.
+The server keeps a key for 24 hours. A repeat with the same key returns the first snap and renders nothing. A key belongs to one kind of call. Do not use the key of a single snap for a batch, or the key of a batch for a single snap. The server rejects it with a 409, and the SDK does not retry it. The SDK also retries `batches.cancel()` and `templates.publish()`, because a repeat of these calls changes nothing. The SDK does not retry a write to an editor document, because a repeat gets a conflict.
+
+### Rate limits
+
+The server counts the requests of each user in one minute:
+
+| Endpoints                                   | Limit                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| Each bearer endpoint                        | 60 requests                                                                      |
+| `snaps.preview()` and `templates.preview()` | 10 requests, in addition to the limit of 60                                      |
+| `sb.documents`                              | 30 requests for one user and 180 for one company, in addition to the limit of 60 |
+
+Over a limit, the server sends a 429 with `Retry-After`. `RateLimitError.limit` is the limit that the request exceeded.
 
 ## Cancel a call
 
