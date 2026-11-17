@@ -11,15 +11,19 @@ const enabled =
 	token !== undefined &&
 	token !== "";
 
-describe.skipIf(!enabled)("integration", () => {
-	const sb = new Snapsbrew({
-		baseUrl: baseUrl ?? "https://unused.test",
-		token: token ?? "unused",
+// Vitest runs the body of a skipped `describe`, so make the client only
+// inside a test. In CI, a secret that is not set is an empty string.
+function client(): Snapsbrew {
+	return new Snapsbrew({
+		baseUrl: baseUrl ?? "",
+		token: token ?? "",
 		maxRetries: 1,
 	});
+}
 
+describe.skipIf(!enabled)("integration", () => {
 	it("reads the account of the token", async () => {
-		const account = await sb.account.get();
+		const account = await client().account.get();
 
 		expect(typeof account.email).toBe("string");
 		expect(
@@ -28,6 +32,7 @@ describe.skipIf(!enabled)("integration", () => {
 	});
 
 	it("lists templates and previews the first one", async () => {
+		const sb = client();
 		const page = await sb.templates.list();
 
 		expect(Array.isArray(page.data)).toBe(true);
