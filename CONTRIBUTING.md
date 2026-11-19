@@ -4,29 +4,29 @@ Thank you for your help. This file tells you how to set up the project and how t
 
 ## Set up
 
-1. Install Node.js 22 or later. The build tools need Node.js 22. The package itself runs on Node.js 20.
+1. Install Node.js 22.18 or later. The build tools need Node.js 22.18. The package itself runs on Node.js 20.
 2. Clone the repository.
-3. Run `npm ci`.
+3. Run `npm ci`. The `prepare` script builds `dist/`.
 
 ## Commands
 
-| Command                 | What it does                                                     |
-| ----------------------- | ---------------------------------------------------------------- |
-| `npm test`              | Runs the unit tests with Vitest.                                 |
-| `npm run typecheck`     | Runs `tsc --noEmit` on the source and on the tests.              |
-| `npm run lint`          | Runs Biome for lint and format.                                  |
-| `npm run format`        | Applies the Biome format and the safe fixes.                     |
-| `npm run build`         | Builds `dist/` with tsdown.                                      |
-| `npm run check:package` | Runs publint and Are the Types Wrong on the package.             |
-| `npm run smoke:node`    | Imports the build in Node.js (ESM and CommonJS) and signs a URL. |
-| `npm run smoke:bun`     | Does the same check in Bun.                                      |
-| `npm run smoke:deno`    | Does the same check in Deno.                                     |
+| Command                 | What it does                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `npm test`              | Runs the unit tests with Vitest.                                                     |
+| `npm run typecheck`     | Runs `tsc --noEmit` on the source and on the tests.                                  |
+| `npm run lint`          | Runs Biome for lint and format.                                                      |
+| `npm run format`        | Applies the Biome format and the safe fixes.                                         |
+| `npm run build`         | Builds `dist/` with tsdown.                                                          |
+| `npm run check:package` | Runs publint and Are the Types Wrong on the package.                                 |
+| `npm run smoke:node`    | Imports the build in Node.js (ESM and CommonJS), signs a URL and verifies a webhook. |
+| `npm run smoke:bun`     | Does the same check in Bun.                                                          |
+| `npm run smoke:deno`    | Does the same check in Deno.                                                         |
 
 Run the smoke commands after `npm run build`.
 
 ## Integration tests
 
-The integration tests call a real Snapsbrew instance. They are read-only, except for one free preview.
+The integration tests call a real Snapsbrew instance. They are read-only, except for one preview. A preview stores nothing.
 
 1. Set `SNAPSBREW_TEST_URL` to the root URL of the instance.
 2. Set `SNAPSBREW_TEST_TOKEN` to a token with the `api_requests` ability.

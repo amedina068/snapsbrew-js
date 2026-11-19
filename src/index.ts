@@ -17,6 +17,8 @@ export {
 	type SnapsbrewErrorCode,
 	TimeoutError,
 	ValidationError,
+	type WebhookFailureReason,
+	WebhookVerificationError,
 } from "./errors";
 export { PagePromise } from "./pagination";
 export type {
@@ -54,3 +56,15 @@ export type {
 } from "./resources/templates";
 export { encodeVariants, type SignedUrlOptions, signedUrl } from "./signed-url";
 export type * from "./types";
+export {
+	type SnapCompletedPayload,
+	type SnapFailedPayload,
+	type SnapImportPayload,
+	type SnapImportProgress,
+	type VerifiedWebhook,
+	type VerifyWebhookOptions,
+	verifyWebhook,
+	WEBHOOK_HEADERS,
+	type WebhookHeaders,
+	type WebhookPayload,
+} from "./webhooks";

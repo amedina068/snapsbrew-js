@@ -4,6 +4,29 @@ All notable changes to this project are in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- `verifyWebhook()` verifies a webhook from Snapsbrew. It checks `X-Snapsbrew-Signature` in constant time and refuses a timestamp more than 300 seconds from now. The `tolerance` option changes the limit.
+- `verifyWebhook()` returns `deliveryId`, the value of `X-Snapsbrew-Delivery`. Use it to ignore a duplicate delivery.
+- `WebhookVerificationError` with a `reason`: `signature`, `timestamp` or `delivery`.
+- Webhook payload types for `snap.completed`, `snap.failed`, `snap-import.completed`, `snap-import.failed` and `snap-import.canceled`.
+- `ConflictError.currentDocument` gives the stored document of an `editor_document_conflict`.
+- `NotFoundError.available` gives the valid keys when `guides.platform()` or `guides.purpose()` gets a key that does not exist.
+- `SnapErrorCode` type for `Snap.last_error`: `render_failed`, `webhook_redirect_refused`, `webhook_unreachable` and `webhook_http_<status>`.
+- The `prepare` script builds the package, so `npm install github:amedina068/snapsbrew-js` installs a working package.
+- The README has a link to the SDK documentation, a webhook section and the install from git.
+
+### Changed
+
+- `Snap.last_error` is `SnapErrorCode | null`, not `string | null`. `BatchItem.last_error` is `"render_failed" | null`.
+- `templates.create()` accepts `groups: null`, the same as `templates.update()`.
+- The README and the comments do not say that a render costs a credit. The server keeps a usage log with no balance.
+- The README documents the file types and the size limit of `media.upload()`, and the limits of the screenshot `width` and `height`. The SDK does not check them.
+- The README says that a signed URL accepts each active key of the company of the template, and that `templates.delete()` also deletes the snaps, images, versions and forms of the template.
+- The Node.js 20 job of the CI installs with `--ignore-scripts`, because the build tools need Node.js 22.18.
+
 ## [0.1.0] - Unreleased
 
 ### Added

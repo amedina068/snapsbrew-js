@@ -1,6 +1,6 @@
 {
 	"name": "snapsbrew",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "TypeScript client for a self-hosted Snapsbrew instance. One package for Node, Bun, Deno and Cloudflare Workers.",
 	"keywords": [
 		"snapsbrew",
@@ -41,6 +41,7 @@
 	},
 	"scripts": {
 		"build": "tsdown",
+		"prepare": "tsdown",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p test",

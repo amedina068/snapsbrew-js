@@ -4,7 +4,9 @@ The TypeScript client for a self-hosted [Snapsbrew](https://snapsbrew.com) insta
 
 One package runs on Node.js, Bun, Deno, Cloudflare Workers and other edge runtimes. The package has no runtime dependencies. It uses the global `fetch` and Web Crypto.
 
-> Status: 0.1.0, not released. The package is not on npm yet.
+> Status: 0.2.0, not released. The package is not on npm yet. Install it from git.
+
+Read the Snapsbrew SDK documentation at [snapsbrew.com/docs/sdks/overview](https://snapsbrew.com/docs/sdks/overview).
 
 ## Contents
 
@@ -14,6 +16,7 @@ One package runs on Node.js, Bun, Deno, Cloudflare Workers and other edge runtim
 - [Resources](#resources)
 - [Pagination](#pagination)
 - [Signed URLs](#signed-urls)
+- [Webhooks](#webhooks)
 - [Errors](#errors)
 - [Retries](#retries)
 - [Cancel a call](#cancel-a-call)
@@ -22,11 +25,19 @@ One package runs on Node.js, Bun, Deno, Cloudflare Workers and other edge runtim
 
 ## Install
 
+The package is not on npm yet. Install it from the GitHub repository:
+
 ```sh
-npm install snapsbrew
+npm install github:amedina068/snapsbrew-js
 ```
 
-For Bun, use `bun add snapsbrew`. For Deno, import `npm:snapsbrew`.
+The repository is private. Your git client must have access to it, for example through SSH keys or `gh auth login`.
+
+The `prepare` script builds the package during the install. The build tools need Node.js 22.18 or later. The built package runs on Node.js 20.
+
+For Bun, use `bun add github:amedina068/snapsbrew-js`.
+
+After the release on npm, the install command is `npm install snapsbrew`.
 
 ## Quick start
 
@@ -38,13 +49,13 @@ const sb = new Snapsbrew({
 	token: process.env.SNAPSBREW_TOKEN,
 });
 
-// A preview is free. It returns watermarked HTML.
+// A preview returns watermarked HTML. It stores nothing.
 const html = await sb.snaps.preview({
 	templateId: "044ec825-ee2f-4d06-bb77-98663e27f529",
 	variants: [{ layer: "title", text: "Hello" }],
 });
 
-// A snap costs one credit. It returns the URL of the final image.
+// A snap renders the final image and returns its URL.
 const snap = await sb.snaps.create({
 	templateId: "044ec825-ee2f-4d06-bb77-98663e27f529",
 	variants: [{ layer: "title", text: "Hello" }],
@@ -87,6 +98,34 @@ The response types keep the field names of the API (`media_url`, `created_at`). 
 
 Snaps render the published version of a template. After you change a template, call `sb.templates.publish(uuid)`.
 
+`sb.templates.delete(uuid)` also deletes the snaps, images, versions and forms of the template.
+
+### Template groups
+
+`templates.create()` and `templates.update()` accept `groups`: the layer groups, in the shape that the editor saves. Each group has an `id`. The fields `name`, `visible`, `collapsed` and `order` are optional. Send `null` to remove the groups.
+
+```ts
+await sb.templates.update(uuid, {
+	title: "Launch card",
+	groups: [{ id: "header", name: "Header", visible: true, order: 0 }],
+});
+```
+
+### Snap errors
+
+`snap.last_error` is a fixed code, or `null`. The type `SnapErrorCode` lists the codes:
+
+| Code                       | Cause                                                 |
+| -------------------------- | ----------------------------------------------------- |
+| `render_failed`            | The render failed. The status is `failed`.            |
+| `webhook_redirect_refused` | The webhook receiver answered with a redirect.        |
+| `webhook_unreachable`      | The server could not connect to the webhook receiver. |
+| `webhook_http_<status>`    | The webhook receiver answered with this error status. |
+
+A webhook code can be on a `completed` snap. Then the render worked, but the delivery of the webhook failed. The `last_error` of a batch item is `render_failed` or `null`.
+
+A snap with no file has an empty string as `media_url`.
+
 ### Batches
 
 ```ts
@@ -109,6 +148,18 @@ for (const item of done.items) {
 
 A batch has 1 to 100 items. `wait()` reads the batch every 5 seconds until the status is `completed`, `failed` or `canceled`.
 
+### Screenshots
+
+```ts
+const shot = await sb.screenshots.create({
+	url: "https://example.com",
+	width: 1200,
+	height: 630,
+});
+```
+
+`width` and `height` are 1 to 4000. The server checks them. The SDK does not.
+
 ### Media upload
 
 ```ts
@@ -120,6 +171,8 @@ await sb.snaps.create({
 	variants: [{ layer: "logo", image_url: media.src }],
 });
 ```
+
+The server accepts jpg, jpeg, png, gif, webp and bmp files up to 10 MB. It refuses SVG. The server checks the file. The SDK does not.
 
 ## Pagination
 
@@ -157,7 +210,9 @@ const url = await signedUrl({
 
 WARNING: Sign URLs only on the server. A signing key in browser code lets any person render images on your account.
 
-The signing key is not the API token. Make a signing key in the Snapsbrew dashboard. The token of the key must have the `signed_url` ability.
+The signing key is not the API token. Make a signing key in the Snapsbrew dashboard. The token of the key must have the `signed_url` ability. The server accepts each active key of the company that owns the template.
+
+The `params` option adds more query parameters to the signature. The names `identifier` and `api_log_uuid` are reserved for the server, so `signedUrl()` refuses them. It also refuses the names that the options set: `template_id`, `variants`, `format`, `transparent` and `signature`.
 
 The algorithm:
 
@@ -168,36 +223,122 @@ The algorithm:
 
 `variants` is the standard base64 (with `+`, `/` and `=`) of the JSON array of variants. The server decodes it with the PHP `base64_decode` function, so URL-safe base64 does not work.
 
+## Webhooks
+
+An async snap and a batch post a webhook to their `webhookUrl`. Snapsbrew signs each webhook with the webhook signing secret of your company. Get the secret in **Account > Developers**. It starts with `whsec_`.
+
+`verifyWebhook()` checks the signature and the timestamp. Then it returns the delivery ID and the payload.
+
+WARNING: Verify webhooks only on the server. A webhook secret in browser code lets any person send you false events.
+
+```ts
+import { verifyWebhook } from "snapsbrew";
+
+const { deliveryId, timestamp, payload } = await verifyWebhook({
+	body: rawBody, // the raw body: a string, a Uint8Array, an ArrayBuffer or a Buffer
+	headers: request.headers, // a Headers object or a plain object
+	secret: process.env.SNAPSBREW_WEBHOOK_SECRET,
+});
+
+switch (payload.event) {
+	case "snap.completed":
+		console.log(payload.snap.media_url);
+		break;
+	case "snap.failed":
+		console.log(payload.snap.id, payload.snap.last_error); // "render_failed"
+		break;
+	case "snap-import.completed":
+	case "snap-import.failed":
+	case "snap-import.canceled":
+		console.log(payload.import.uuid, payload.import.completed);
+		break;
+}
+```
+
+Use the raw request body. Do not parse the JSON and encode it again. The server escapes `/` and non-ASCII characters (`\/`, `\u00bf`), so a new encoding gives other bytes and the signature fails.
+
+| Option      | Default      | Description                                                 |
+| ----------- | ------------ | ----------------------------------------------------------- |
+| `body`      | (required)   | The raw request body.                                       |
+| `headers`   | (required)   | The request headers. The names are not case-sensitive.      |
+| `secret`    | (required)   | The webhook signing secret, with its `whsec_` prefix.       |
+| `tolerance` | `300`        | The maximum distance of the timestamp from now, in seconds. |
+| `now`       | `new Date()` | The current time. Use it in tests.                          |
+
+The result has these fields:
+
+- `deliveryId`: the value of `X-Snapsbrew-Delivery`. Each attempt of one delivery has the same ID. Store the ID, and ignore a webhook with an ID that you know.
+- `timestamp`: the value of `X-Snapsbrew-Timestamp`, in Unix seconds.
+- `payload`: the decoded body. A `switch (payload.event)` narrows its type.
+
+The events are `snap.completed`, `snap.failed`, `snap-import.completed`, `snap-import.failed` and `snap-import.canceled`. A `snap.failed` payload has `status: "failed"`, `last_error: "render_failed"` and an empty `media_url`. A new server version can send a new event, so keep a `default` branch.
+
+If the webhook is not valid, `verifyWebhook()` throws a `WebhookVerificationError`. Its `reason` is `signature`, `timestamp` or `delivery`. Answer the request with a 400.
+
+The signature is the lowercase hex HMAC-SHA256 of `{X-Snapsbrew-Timestamp}.{raw body}`, with the secret as the key. `verifyWebhook()` compares it in constant time.
+
 ## Errors
 
 Each error that the SDK throws extends `SnapsbrewError` and has a `code`.
 
-| Class                 | `code`                 | Cause                                                                           |
-| --------------------- | ---------------------- | ------------------------------------------------------------------------------- |
-| `AuthenticationError` | `authentication_error` | 401: the token is missing or not valid.                                         |
-| `AuthorizationError`  | `authorization_error`  | 403: the token cannot do this action, or a permission check refused it.         |
-| `NotFoundError`       | `not_found`            | 404: the resource is not in your company.                                       |
-| `ConflictError`       | `conflict`             | 409: the request conflicts with the current state. Read `apiCode`.              |
-| `ValidationError`     | `validation_error`     | 422: the server rejected a field. Read `errors` for the messages of each field. |
-| `RateLimitError`      | `rate_limit`           | 429: too many requests. Read `retryAfter` and `limit`.                          |
-| `ServerError`         | `server_error`         | 5xx: the server failed.                                                         |
-| `ApiError`            | `api_error`            | Another error status. Each class above extends `ApiError`.                      |
-| `ConnectionError`     | `connection_error`     | The request did not get a response.                                             |
-| `TimeoutError`        | `timeout`              | One attempt took more time than `timeout`.                                      |
+| Class                      | `code`                       | Cause                                                                           |
+| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| `AuthenticationError`      | `authentication_error`       | 401: the token is missing or not valid.                                         |
+| `AuthorizationError`       | `authorization_error`        | 403: the token cannot do this action, or a permission check refused it.         |
+| `NotFoundError`            | `not_found`                  | 404: the resource is not in your company. A guide 404 has `available`.          |
+| `ConflictError`            | `conflict`                   | 409: the request conflicts with the current state. Read `apiCode`.              |
+| `ValidationError`          | `validation_error`           | 422: the server rejected a field. Read `errors` for the messages of each field. |
+| `RateLimitError`           | `rate_limit`                 | 429: too many requests. Read `retryAfter` and `limit`.                          |
+| `ServerError`              | `server_error`               | 5xx: the server failed.                                                         |
+| `ApiError`                 | `api_error`                  | Another error status. Each class above extends `ApiError`.                      |
+| `ConnectionError`          | `connection_error`           | The request did not get a response.                                             |
+| `TimeoutError`             | `timeout`                    | One attempt took more time than `timeout`.                                      |
+| `WebhookVerificationError` | `webhook_verification_error` | `verifyWebhook()` refused a webhook. Read `reason`.                             |
 
 Each `ApiError` has `status`, `body`, `headers`, `requestId` and `apiCode`. `apiCode` is the `code` field of the body, when the body has one. Give the `requestId` to support.
 
+A token without the `api_requests` ability gets a 403 on each call. The SDK throws an `AuthorizationError`.
+
+The message of a 404 can change, for example `No query results for model [...]`. Do not compare it. If `guides.platform()` or `guides.purpose()` gets a key that does not exist, `NotFoundError.available` lists the valid keys:
+
+```ts
+try {
+	await sb.guides.platform("myspace");
+} catch (error) {
+	if (error instanceof NotFoundError) console.log(error.available);
+}
+```
+
+A 422 from `documents.apply()` can have no field errors. Then `ValidationError.errors` is empty, and `apiCode` names the rule, for example `editor_operation_layer_not_found`.
+
 The `apiCode` of a `ConflictError` tells you the cause. The type `ConflictCode` lists the known values:
 
-| `apiCode`                          | Cause                                                        | What to do                                                   |
-| ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| `idempotency_key_in_progress`      | Another request with the same idempotency key is running.    | Send the request again with the same key. The SDK does this. |
-| `idempotency_key_belongs_to_snap`  | A single snap owns the key. The call was `batches.create()`. | Send a new key.                                              |
-| `idempotency_key_belongs_to_batch` | A batch owns the key. The call was `snaps.create()`.         | Send a new key.                                              |
-| `editor_document_conflict`         | The revision of the editor document moved.                   | Read the document again. `currentRevision` has the revision. |
-| `legacy_edit_rejected_for_v2`      | The template uses the v2 editor document.                    | Use `sb.documents` to change the template.                   |
+| `apiCode`                          | Cause                                                        | What to do                                                             |
+| ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `idempotency_key_in_progress`      | Another request with the same idempotency key is running.    | Send the request again with the same key. The SDK does this.           |
+| `idempotency_key_belongs_to_snap`  | A single snap owns the key. The call was `batches.create()`. | Send a new key.                                                        |
+| `idempotency_key_belongs_to_batch` | A batch owns the key. The call was `snaps.create()`.         | Send a new key.                                                        |
+| `editor_document_conflict`         | The revision of the editor document moved.                   | Apply the change to `currentDocument`. Send it with `currentRevision`. |
+| `legacy_edit_rejected_for_v2`      | The template uses the v2 editor document.                    | Use `sb.documents` to change the template.                             |
 
-For each 409, the server created nothing and charged no credit.
+For each 409, the server created nothing.
+
+```ts
+try {
+	await sb.documents.replace(uuid, { revision, document });
+} catch (error) {
+	if (
+		error instanceof ConflictError &&
+		error.apiCode === "editor_document_conflict"
+	) {
+		const next = applyMyChange(error.currentDocument);
+		await sb.documents.replace(uuid, {
+			revision: error.currentRevision,
+			document: next,
+		});
+	}
+}
+```
 
 If `snaps.create()` or `batches.create()` fails on the server, the SDK throws a `ServerError` with the `apiCode` `internal_error`. The message does not show the cause. Give the `requestId` to support.
 
@@ -244,7 +385,7 @@ The SDK retries a failed call up to `maxRetries` times. The delay doubles on eac
 | Connection refused, DNS error     | Yes                       | Yes. The server did not get the request.                     |
 | Other connection error            | Yes                       | Only with an `idempotencyKey`                                |
 
-A render costs a credit. To retry a render safely, send an idempotency key:
+A repeat of a render makes a second snap. To retry a render safely, send an idempotency key:
 
 ```ts
 await sb.snaps.create({
@@ -308,6 +449,74 @@ app.get("/posts/:slug", async (c) => {
 
 	return c.html(`<head><meta property="og:image" content="${image}"></head>`);
 });
+```
+
+### Webhooks in Next.js, Hono or Cloudflare Workers
+
+These frameworks give a Fetch API `Request`. Read the raw body with `request.text()`.
+
+```ts
+// app/api/webhooks/snapsbrew/route.ts
+import { verifyWebhook, WebhookVerificationError } from "snapsbrew";
+
+export async function POST(request: Request) {
+	let webhook;
+
+	try {
+		webhook = await verifyWebhook({
+			body: await request.text(),
+			headers: request.headers,
+			secret: process.env.SNAPSBREW_WEBHOOK_SECRET!,
+		});
+	} catch (error) {
+		if (error instanceof WebhookVerificationError) {
+			return new Response(error.message, { status: 400 });
+		}
+		throw error;
+	}
+
+	if (await alreadyHandled(webhook.deliveryId)) {
+		return new Response(null, { status: 200 });
+	}
+
+	await handle(webhook.payload);
+
+	return new Response(null, { status: 200 });
+}
+```
+
+### Webhooks in Express
+
+Use `express.raw()` on the webhook route. `express.json()` parses the body, and then the raw bytes are lost.
+
+```ts
+import express from "express";
+import { verifyWebhook, WebhookVerificationError } from "snapsbrew";
+
+const app = express();
+
+app.post(
+	"/webhooks/snapsbrew",
+	express.raw({ type: "application/json" }),
+	async (req, res) => {
+		try {
+			const { deliveryId, payload } = await verifyWebhook({
+				body: req.body, // a Buffer
+				headers: req.headers,
+				secret: process.env.SNAPSBREW_WEBHOOK_SECRET!,
+			});
+
+			await handleOnce(deliveryId, payload);
+			res.sendStatus(200);
+		} catch (error) {
+			if (error instanceof WebhookVerificationError) {
+				res.status(400).send(error.message);
+				return;
+			}
+			throw error;
+		}
+	},
+);
 ```
 
 ### A custom `fetch`

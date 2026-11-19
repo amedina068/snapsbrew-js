@@ -29,7 +29,8 @@ export type CreateTemplateParams = {
 	title: string;
 	/** The layers. `GET /v1/guides/layers` gives the vocabulary. An empty list makes an empty canvas. */
 	layers?: readonly LayerDefinition[];
-	groups?: readonly LayerGroup[];
+	/** The layer groups, in the shape that the editor saves. */
+	groups?: readonly LayerGroup[] | null;
 } & TemplateCanvas;
 
 /** The fields of `templates.update()`. The server requires `title` on each update. */
@@ -140,7 +141,10 @@ export class Templates {
 		return body.data;
 	}
 
-	/** Deletes a template. The id is the UUID or the numeric id. */
+	/**
+	 * Deletes a template. The id is the UUID or the numeric id. The server
+	 * also deletes the snaps, images, versions and forms of the template.
+	 */
 	async delete(
 		templateId: string | number,
 		options: RequestOptions = {},
@@ -171,7 +175,7 @@ export class Templates {
 		return body.data;
 	}
 
-	/** Renders a watermarked HTML preview. A preview costs no credit and stores nothing. */
+	/** Renders a watermarked HTML preview. A preview stores nothing. */
 	async preview(
 		templateUuid: string,
 		params: TemplatePreviewParams = {},
@@ -227,7 +231,8 @@ export interface ApplyOperationsParams {
 /**
  * `/v1/templates/{uuid}/document`: the v2 editor draft of a template. Each
  * write is a compare-and-swap. If the revision moved, the write throws a
- * `ConflictError` with `currentRevision`. The SDK does not retry a write.
+ * `ConflictError` with `currentRevision` and `currentDocument`. The SDK does
+ * not retry a write.
  */
 export class EditorDocuments {
 	readonly #transport: Transport;

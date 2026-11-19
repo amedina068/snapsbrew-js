@@ -1,6 +1,19 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { Media, Screenshot, ScreenshotListItem } from "../src/index";
-import { ServerError } from "../src/index";
+import type {
+	BatchItem,
+	Media,
+	Screenshot,
+	ScreenshotListItem,
+	Snap,
+	SnapErrorCode,
+	Snapsbrew,
+} from "../src/index";
+import {
+	AuthorizationError,
+	NotFoundError,
+	ServerError,
+	ValidationError,
+} from "../src/index";
 import { callOf, client, html, json, mockFetch } from "./helpers";
 
 const TEMPLATE_ID = "141e8454-8aa1-420a-bd0b-18a85ba949a2";
@@ -92,6 +105,108 @@ describe("request basics", () => {
 
 		await expect(client(fetch).templates.get("")).rejects.toThrow(TypeError);
 		expect(fetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("errors on each resource", () => {
+	const calls: Array<[string, (sb: Snapsbrew) => PromiseLike<unknown>]> = [
+		["account.get", (sb) => sb.account.get()],
+		["templates.list", (sb) => sb.templates.list()],
+		["templates.get", (sb) => sb.templates.get(TEMPLATE_ID)],
+		["templates.sizes", (sb) => sb.templates.sizes()],
+		[
+			"templates.create",
+			(sb) => sb.templates.create({ title: "Card", size: "open_graph" }),
+		],
+		[
+			"templates.update",
+			(sb) => sb.templates.update(TEMPLATE_ID, { title: "Card" }),
+		],
+		["templates.delete", (sb) => sb.templates.delete(TEMPLATE_ID)],
+		["templates.publish", (sb) => sb.templates.publish(TEMPLATE_ID)],
+		["templates.preview", (sb) => sb.templates.preview(TEMPLATE_ID)],
+		["templates.setTags", (sb) => sb.templates.setTags(TEMPLATE_ID, [1])],
+		["documents.get", (sb) => sb.documents.get(TEMPLATE_ID)],
+		[
+			"documents.replace",
+			(sb) =>
+				sb.documents.replace(TEMPLATE_ID, {
+					revision: 1,
+					document: { version: 2, layers: [], groups: [] },
+				}),
+		],
+		[
+			"documents.apply",
+			(sb) => sb.documents.apply(TEMPLATE_ID, { revision: 1, operations: [] }),
+		],
+		["documents.preflight", (sb) => sb.documents.preflight(TEMPLATE_ID)],
+		["snaps.create", (sb) => sb.snaps.create({ templateId: TEMPLATE_ID })],
+		["snaps.preview", (sb) => sb.snaps.preview({ templateId: TEMPLATE_ID })],
+		[
+			"batches.create",
+			(sb) => sb.batches.create({ templateId: TEMPLATE_ID, items: [{}] }),
+		],
+		["batches.get", (sb) => sb.batches.get(BATCH_ID)],
+		["batches.cancel", (sb) => sb.batches.cancel(BATCH_ID)],
+		["screenshots.list", (sb) => sb.screenshots.list()],
+		["screenshots.get", (sb) => sb.screenshots.get("s-1")],
+		[
+			"screenshots.create",
+			(sb) => sb.screenshots.create({ url: "https://example.com" }),
+		],
+		["media.list", (sb) => sb.media.list()],
+		["media.upload", (sb) => sb.media.upload(new Blob(["x"]))],
+		["tags.list", (sb) => sb.tags.list()],
+		["tags.create", (sb) => sb.tags.create({ name: "Launch" })],
+		["guides.design", (sb) => sb.guides.design()],
+		["guides.platforms", (sb) => sb.guides.platforms()],
+		["guides.platform", (sb) => sb.guides.platform("instagram")],
+		["guides.purposes", (sb) => sb.guides.purposes()],
+		["guides.purpose", (sb) => sb.guides.purpose("og")],
+	];
+
+	for (const [name, call] of calls) {
+		it(`${name}() maps a 403 for a token with no api_requests ability`, async () => {
+			const fetch = mockFetch(
+				json(403, { message: "Invalid ability provided." }),
+			);
+
+			await expect(
+				call(client(fetch, { maxRetries: 0 })),
+			).rejects.toBeInstanceOf(AuthorizationError);
+		});
+	}
+
+	it("maps a bad cursor of a list to ValidationError", async () => {
+		const fetch = mockFetch(
+			json(422, {
+				message: "The cursor is not valid.",
+				errors: { cursor: ["The cursor is not valid."] },
+			}),
+		);
+
+		await expect(
+			client(fetch).templates.list({ cursor: "bad" }),
+		).rejects.toBeInstanceOf(ValidationError);
+	});
+
+	it("gives the valid keys when a guide does not exist", async () => {
+		const fetch = mockFetch(
+			json(404, {
+				message: "No purpose guide matches `poster`.",
+				available: ["link_preview", "carousel"],
+			}),
+		);
+
+		const error = await client(fetch)
+			.guides.purpose("poster")
+			.catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(NotFoundError);
+		expect((error as NotFoundError).available).toEqual([
+			"link_preview",
+			"carousel",
+		]);
 	});
 });
 
@@ -816,5 +931,60 @@ describe("guides", () => {
 			"/api/v1/guides/platforms/insta",
 		);
 		expect(callOf(fetch, 1).url.pathname).toBe("/api/v1/guides/purposes/og");
+	});
+});
+
+describe("template groups", () => {
+	const result = {
+		uuid: TEMPLATE_ID,
+		title: "Card",
+		size: "open_graph",
+		width: 1200,
+		height: 630,
+		created_at: "x",
+	};
+	const groups = [
+		{ id: "g1", name: "Header", visible: true, collapsed: false, order: 0 },
+	];
+
+	it("create() and update() send the groups", async () => {
+		const fetch = mockFetch(
+			json(200, { data: result }),
+			json(200, { data: result }),
+		);
+		const sb = client(fetch);
+
+		await sb.templates.create({ title: "Card", size: "open_graph", groups });
+		await sb.templates.update(TEMPLATE_ID, { title: "Card", groups: null });
+
+		expect(callOf(fetch, 0).body).toMatchObject({ groups });
+		expect(callOf(fetch, 1).body).toEqual({ title: "Card", groups: null });
+	});
+
+	it("create() accepts null to send no groups", async () => {
+		const fetch = mockFetch(json(200, { data: result }));
+
+		await client(fetch).templates.create({
+			title: "Card",
+			size: "open_graph",
+			groups: null,
+		});
+
+		expect(callOf(fetch).body).toMatchObject({ groups: null });
+	});
+});
+
+describe("last_error", () => {
+	it("types the error of a snap as a code", () => {
+		expectTypeOf<Snap["last_error"]>().toEqualTypeOf<SnapErrorCode | null>();
+		expectTypeOf<"webhook_http_500">().toExtend<SnapErrorCode>();
+		expectTypeOf<"render_failed">().toExtend<SnapErrorCode>();
+		expectTypeOf<"Something broke">().not.toExtend<SnapErrorCode>();
+	});
+
+	it("types the error of a batch item as render_failed", () => {
+		expectTypeOf<BatchItem["last_error"]>().toEqualTypeOf<
+			"render_failed" | null
+		>();
 	});
 });

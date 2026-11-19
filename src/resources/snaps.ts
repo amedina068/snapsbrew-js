@@ -61,8 +61,8 @@ export class Snaps {
 	}
 
 	/**
-	 * Renders a snap from the published version of a template. Each render
-	 * costs one credit. Use `preview()` first: it is free.
+	 * Renders a snap from the published version of a template. The server
+	 * stores each render. Use `preview()` first: it stores nothing.
 	 *
 	 * @example
 	 * const snap = await sb.snaps.create({
@@ -103,8 +103,8 @@ export class Snaps {
 	}
 
 	/**
-	 * Renders a watermarked HTML preview of a snap. A preview costs no credit
-	 * and stores nothing. The server allows 10 previews a minute.
+	 * Renders a watermarked HTML preview of a snap. A preview stores nothing.
+	 * The server allows 10 previews a minute.
 	 */
 	async preview(
 		params: SnapPreviewParams,

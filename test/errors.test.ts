@@ -135,7 +135,42 @@ describe("HTTP errors", () => {
 		expect(error).toMatchObject({
 			apiCode: "editor_document_conflict",
 			currentRevision: 5,
+			currentDocument: { version: 2 },
 		});
+	});
+
+	it("gives no current document when the 409 body has none", async () => {
+		const error = await errorFor(
+			json(409, { code: "idempotency_key_in_progress" }),
+		);
+
+		expect((error as ConflictError).currentDocument).toBeUndefined();
+	});
+
+	it("maps each 404 to NotFoundError, whatever the message", async () => {
+		const error = await errorFor(
+			json(404, {
+				message: "No query results for model [App\\Models\\Template].",
+			}),
+		);
+
+		expect(error).toBeInstanceOf(NotFoundError);
+		expect((error as NotFoundError).available).toBeUndefined();
+	});
+
+	it("gives the valid keys of a guide 404", async () => {
+		const error = await errorFor(
+			json(404, {
+				message: "No platform guide matches `myspace`.",
+				available: ["instagram", "linkedin", 7],
+			}),
+		);
+
+		expect(error).toBeInstanceOf(NotFoundError);
+		expect((error as NotFoundError).available).toEqual([
+			"instagram",
+			"linkedin",
+		]);
 	});
 
 	it("gives the Retry-After value and the limit of a 429", async () => {

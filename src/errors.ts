@@ -1,3 +1,5 @@
+import type { EditorDocumentBody } from "./types";
+
 /** The `code` of each error class. Use it in a `switch` to narrow the error. */
 export type SnapsbrewErrorCode =
 	| "authentication_error"
@@ -9,7 +11,8 @@ export type SnapsbrewErrorCode =
 	| "server_error"
 	| "api_error"
 	| "connection_error"
-	| "timeout";
+	| "timeout"
+	| "webhook_verification_error";
 
 /**
  * The base class of every error that the SDK throws. An abort from your own
@@ -23,7 +26,7 @@ export abstract class SnapsbrewError extends Error {
 /** The `code` of each error that has an HTTP response. */
 export type ApiErrorCode = Exclude<
 	SnapsbrewErrorCode,
-	"connection_error" | "timeout"
+	"connection_error" | "timeout" | "webhook_verification_error"
 >;
 
 /** The server sent a response with an error status. */
@@ -66,10 +69,26 @@ export class AuthorizationError extends ApiError {
 	override name = "AuthorizationError";
 }
 
-/** 404: the resource does not exist in your company. */
+/**
+ * 404: the resource does not exist in your company. The message text can
+ * change, so do not compare it.
+ */
 export class NotFoundError extends ApiError {
 	override readonly code = "not_found" as const;
 	override name = "NotFoundError";
+	/**
+	 * The valid keys, when `guides.platform()` or `guides.purpose()` gets a
+	 * key that does not exist.
+	 */
+	readonly available: readonly string[] | undefined;
+
+	constructor(status: number, body: unknown, headers: Headers) {
+		super(status, body, headers);
+		const available = isRecord(body) ? body.available : undefined;
+		this.available = Array.isArray(available)
+			? available.filter((key): key is string => typeof key === "string")
+			: undefined;
+	}
 }
 
 /**
@@ -102,19 +121,35 @@ export class ConflictError extends ApiError {
 	declare readonly apiCode: ConflictCode | (string & {}) | undefined;
 	/** The stored revision, when an editor document write conflicts. */
 	readonly currentRevision: number | undefined;
+	/**
+	 * The stored document, when an editor document write conflicts. Apply
+	 * your change to it, then send it with `currentRevision`.
+	 */
+	readonly currentDocument: EditorDocumentBody | undefined;
 
 	constructor(status: number, body: unknown, headers: Headers) {
 		super(status, body, headers);
 		const revision = isRecord(body) ? body.current_revision : undefined;
+		const document = isRecord(body) ? body.current_document : undefined;
 		this.currentRevision = typeof revision === "number" ? revision : undefined;
+		this.currentDocument = isRecord(document)
+			? (document as EditorDocumentBody)
+			: undefined;
 	}
 }
 
-/** 422: the server rejected one or more fields. */
+/**
+ * 422: the server rejected one or more fields. An editor document operation
+ * that the document rejects has no field errors. Then `apiCode` names the
+ * rule, for example `editor_operation_layer_not_found`.
+ */
 export class ValidationError extends ApiError {
 	override readonly code = "validation_error" as const;
 	override name = "ValidationError";
-	/** The messages for each field, for example `{ 'variants.0.image_url': ['...'] }`. */
+	/**
+	 * The messages for each field, for example `{ 'variants.0.image_url': ['...'] }`.
+	 * The object is empty when the body has no `errors`.
+	 */
 	readonly errors: Readonly<Record<string, readonly string[]>>;
 
 	constructor(status: number, body: unknown, headers: Headers) {
@@ -171,6 +206,30 @@ export class ConnectionError extends SnapsbrewError {
 export class TimeoutError extends SnapsbrewError {
 	readonly code = "timeout" as const;
 	override name = "TimeoutError";
+}
+
+/** The reason that `verifyWebhook()` refused a request. */
+export type WebhookFailureReason = "signature" | "timestamp" | "delivery";
+
+/**
+ * `verifyWebhook()` refused a request: the signature does not match, the
+ * timestamp is too old or too new, or a header is missing. Answer the
+ * request with a 400.
+ */
+export class WebhookVerificationError extends SnapsbrewError {
+	readonly code = "webhook_verification_error" as const;
+	override name = "WebhookVerificationError";
+	/**
+	 * `signature`: the signature is missing or does not match.
+	 * `timestamp`: the timestamp is missing, or it is outside the tolerance.
+	 * `delivery`: the delivery ID is missing.
+	 */
+	readonly reason: WebhookFailureReason;
+
+	constructor(reason: WebhookFailureReason, message: string) {
+		super(message);
+		this.reason = reason;
+	}
 }
 
 /** Makes the error class that matches an HTTP status. */
@@ -314,7 +373,8 @@ export type AnySnapsbrewError =
 	| ServerError
 	| (ApiError & { readonly code: "api_error" })
 	| ConnectionError
-	| TimeoutError;
+	| TimeoutError
+	| WebhookVerificationError;
 
 /**
  * Returns `true` for each error that the SDK throws. Use it in a `catch`

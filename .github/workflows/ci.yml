@@ -51,7 +51,9 @@ jobs:
           cache: npm
       # The build tools need Node 22. On Node 20, npm prints an engine
       # warning for them and installs them. Vitest runs on Node 20.
-      - run: npm ci
+      # `--ignore-scripts` stops the `prepare` build. This job tests the
+      # build of the check job.
+      - run: npm ci --ignore-scripts
       - run: npm test
         env:
           SNAPSBREW_TEST_URL: ${{ secrets.SNAPSBREW_TEST_URL }}

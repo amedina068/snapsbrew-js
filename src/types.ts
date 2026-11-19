@@ -189,10 +189,31 @@ export interface CursorPage<T> {
 	};
 }
 
+/**
+ * The `last_error` code of a snap.
+ *
+ * - `render_failed`: the render failed. The status is `failed`.
+ * - `webhook_redirect_refused`: the webhook receiver answered with a redirect.
+ *   The server does not follow it.
+ * - `webhook_unreachable`: the server could not connect to the webhook receiver.
+ * - `webhook_http_<status>`: the webhook receiver answered with this error status.
+ *
+ * A webhook code can be on a `completed` snap: the render worked, but the
+ * delivery of `snap.completed` failed.
+ */
+export type SnapErrorCode =
+	| "render_failed"
+	| "webhook_redirect_refused"
+	| "webhook_unreachable"
+	| `webhook_http_${number}`;
+
 /** A rendered (or queued) snap. */
 export interface Snap {
 	id: string;
-	/** The URL of the finished file. `null` until the render is complete. */
+	/**
+	 * The URL of the finished file. The server sends an empty string when the
+	 * snap has no file, for example a failed snap.
+	 */
 	media_url: string | null;
 	width: number | null;
 	height: number | null;
@@ -201,8 +222,8 @@ export interface Snap {
 	is_async: boolean;
 	webhook_url: string | null;
 	completed_at: Timestamp | null;
-	/** A message for a person. Do not branch on this value. */
-	last_error: string | null;
+	/** A fixed code, or `null`. See `SnapErrorCode`. */
+	last_error: SnapErrorCode | null;
 	variants: Variant[] | null;
 	/** `null` for a snap from an inline design. */
 	template_id: string | null;
@@ -232,8 +253,8 @@ export interface BatchItem {
 	status: SnapStatus;
 	/** Set only when `status` is `completed`. */
 	media_url: string | null;
-	/** A message for a person. Do not branch on this value. */
-	last_error: string | null;
+	/** `render_failed` when the item failed, or `null`. */
+	last_error: "render_failed" | null;
 }
 
 /** A batch with each of its items. */

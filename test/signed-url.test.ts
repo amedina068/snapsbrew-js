@@ -126,6 +126,9 @@ describe("signedUrl()", () => {
 			signedUrl({ ...options, params: { identifier: "x" } }),
 		).rejects.toThrow(/reserved/);
 		await expect(
+			signedUrl({ ...options, params: { api_log_uuid: "x" } }),
+		).rejects.toThrow(/reserved/);
+		await expect(
 			signedUrl({ ...options, params: { "a.b": "x" } }),
 		).rejects.toThrow(/letters/);
 		const jpeg = { ...options, format: "jpeg", transparent: true } as const;

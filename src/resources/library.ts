@@ -39,9 +39,9 @@ export class AccountResource {
 export interface CreateScreenshotParams {
 	/** The public page to capture. */
 	url: string;
-	/** The width of the viewport. The default is 1330. */
+	/** The width of the viewport, 1 to 4000. The default is 1330. */
 	width?: number;
-	/** The height of the viewport. The default is 780. */
+	/** The height of the viewport, 1 to 4000. The default is 780. */
 	height?: number;
 }
 
@@ -142,6 +142,8 @@ export class MediaLibrary {
 
 	/**
 	 * Uploads an image. Use the `src` of the result as an `image_url` variant.
+	 * The server accepts jpg, jpeg, png, gif, webp and bmp files up to 10 MB.
+	 * It refuses SVG.
 	 *
 	 * @example
 	 * const media = await sb.media.upload(new Blob([bytes], { type: 'image/png' }), { filename: 'logo.png' })
