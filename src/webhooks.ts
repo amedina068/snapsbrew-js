@@ -66,9 +66,10 @@ export type WebhookPayload =
 export interface VerifiedWebhook {
 	/**
 	 * The value of `X-Snapsbrew-Delivery`. Each attempt of one delivery has
-	 * the same ID. Store it to ignore a duplicate.
+	 * the same ID. Store it to ignore a duplicate. It is `null` when an older
+	 * instance sends no delivery header.
 	 */
-	deliveryId: string;
+	deliveryId: string | null;
 	/** The value of `X-Snapsbrew-Timestamp`, in Unix seconds. */
 	timestamp: number;
 	/** The decoded body. */
@@ -86,9 +87,14 @@ const DEFAULT_TOLERANCE = 300;
 
 /**
  * Verifies a webhook and returns its delivery ID and its payload. Throws a
- * `WebhookVerificationError` when the signature does not match, when the
- * timestamp is more than `tolerance` seconds from now, or when a header is
- * missing. Call it only on the server: the secret must stay secret.
+ * `WebhookVerificationError` with a `reason`:
+ *
+ * - `signature`: the signature is missing or does not match the body.
+ * - `timestamp`: the timestamp is missing, is not Unix seconds, or is more
+ *   than `tolerance` seconds from now.
+ * - `payload`: the signature is valid, but the body is not a JSON object.
+ *
+ * Call it only on the server: the secret must stay secret.
  *
  * @example
  * const { deliveryId, payload } = await verifyWebhook({
@@ -124,7 +130,7 @@ export async function verifyWebhook(
 		);
 	}
 
-	if (timestamp === undefined || !/^\d+$/.test(timestamp)) {
+	if (timestamp === undefined || !/^[0-9]+$/.test(timestamp)) {
 		throw new WebhookVerificationError(
 			"timestamp",
 			"The X-Snapsbrew-Timestamp header is missing or is not a number.",
@@ -149,18 +155,36 @@ export async function verifyWebhook(
 		);
 	}
 
-	if (deliveryId === undefined || deliveryId === "") {
+	return {
+		deliveryId: deliveryId ?? null,
+		timestamp: Number(timestamp),
+		payload: decodePayload(body),
+	};
+}
+
+function decodePayload(body: Uint8Array): WebhookPayload {
+	let payload: unknown;
+
+	try {
+		payload = JSON.parse(
+			new TextDecoder("utf-8", { fatal: true }).decode(body),
+		);
+	} catch {
+		payload = undefined;
+	}
+
+	if (
+		typeof payload !== "object" ||
+		payload === null ||
+		Array.isArray(payload)
+	) {
 		throw new WebhookVerificationError(
-			"delivery",
-			"The X-Snapsbrew-Delivery header is missing.",
+			"payload",
+			"The signature is valid, but the body is not a JSON object.",
 		);
 	}
 
-	return {
-		deliveryId,
-		timestamp: Number(timestamp),
-		payload: JSON.parse(new TextDecoder().decode(body)),
-	};
+	return payload as WebhookPayload;
 }
 
 // The server signs `{timestamp}.{body}` with HMAC-SHA256 and sends the
@@ -171,9 +195,9 @@ async function signatureMatches(
 	body: Uint8Array,
 	signature: string,
 ): Promise<boolean> {
-	const hex = signature.trim();
+	const hex = signature.toLowerCase();
 
-	if (!/^[0-9a-f]{64}$/i.test(hex)) {
+	if (!/^[0-9a-f]{64}$/.test(hex)) {
 		return false;
 	}
 
@@ -194,11 +218,20 @@ async function signatureMatches(
 	return crypto.subtle.verify("HMAC", key, hexBytes(hex), signed);
 }
 
+/** The trimmed value of a header. An empty value counts as a missing header. */
 function header(headers: WebhookHeaders, name: string): string | undefined {
-	if (isHeaders(headers)) {
-		return headers.get(name) ?? undefined;
-	}
+	const value = isHeaders(headers)
+		? headers.get(name)
+		: objectHeader(headers, name);
+	const trimmed = value?.trim();
 
+	return trimmed === undefined || trimmed === "" ? undefined : trimmed;
+}
+
+function objectHeader(
+	headers: Exclude<WebhookHeaders, Headers>,
+	name: string,
+): string | undefined {
 	for (const [key, value] of Object.entries(headers)) {
 		if (key.toLowerCase() === name) {
 			return typeof value === "string" ? value : value?.[0];

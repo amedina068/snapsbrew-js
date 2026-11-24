@@ -1,4 +1,5 @@
 import { type FetchLike, Transport } from "./core/transport";
+import { Forms } from "./resources/forms";
 import {
 	AccountResource,
 	Guides,
@@ -16,8 +17,11 @@ export interface SnapsbrewOptions {
 	 * `https://app.snapsbrew.com`. The SDK adds `/api` to it.
 	 */
 	baseUrl: string | URL;
-	/** An API token with the `api_requests` ability. */
-	token: string;
+	/**
+	 * An API token with the `api_requests` ability. Each API call needs it.
+	 * Only `forms.submit()` works without a token.
+	 */
+	token?: string | undefined;
 	/** The time limit for one attempt, in milliseconds. The default is 60000. */
 	timeout?: number;
 	/** The maximum number of retries after the first attempt. The default is 2. Use 0 to stop retries. */
@@ -55,12 +59,10 @@ export class Snapsbrew {
 	readonly tags: Tags;
 	/** `/v1/guides`. */
 	readonly guides: Guides;
+	/** `/v1/embedded-forms/{uuid}`: submit an embedded form. */
+	readonly forms: Forms;
 
 	constructor(options: SnapsbrewOptions) {
-		if (typeof options.token !== "string" || options.token.trim() === "") {
-			throw new TypeError("`token` must be an API token that is not empty.");
-		}
-
 		const transport = new Transport({
 			baseUrl: options.baseUrl,
 			token: options.token,
@@ -82,6 +84,7 @@ export class Snapsbrew {
 		this.media = new MediaLibrary(transport);
 		this.tags = new Tags(transport);
 		this.guides = new Guides(transport);
+		this.forms = new Forms(transport);
 	}
 }
 

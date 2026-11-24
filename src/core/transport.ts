@@ -26,7 +26,7 @@ export interface RequestOptions {
 
 export interface TransportOptions {
 	baseUrl: string | URL;
-	token: string;
+	token: string | undefined;
 	timeout: number;
 	maxRetries: number;
 	fetch: FetchLike | undefined;
@@ -38,6 +38,12 @@ export interface RequestSpec {
 	method: HttpMethod;
 	/** The path after `/api`, for example `/v1/templates`. */
 	path: string;
+	/**
+	 * A full signed URL, for example the submit URL of an embedded form. It
+	 * replaces `path`. The URL carries its own authorization, so the SDK does
+	 * not send the token to it.
+	 */
+	signedUrl?: string;
 	query?: QueryParams;
 	/** A JSON body. */
 	json?: unknown;
@@ -72,14 +78,14 @@ const MAX_RETRY_AFTER = 60_000;
 /** Sends requests to one Snapsbrew instance, with time limits and retries. */
 export class Transport {
 	readonly #apiRoot: string;
-	readonly #token: string;
+	readonly #token: string | undefined;
 	readonly #timeout: number;
 	readonly #maxRetries: number;
 	readonly #fetch: FetchLike;
 
 	constructor(options: TransportOptions) {
 		this.#apiRoot = `${instanceRoot(options.baseUrl)}/api`;
-		this.#token = options.token;
+		this.#token = options.token?.trim() || undefined;
 		this.#timeout = options.timeout;
 		this.#maxRetries = options.maxRetries;
 		// Resolve the global `fetch` on each call. A runtime can replace it after
@@ -92,6 +98,14 @@ export class Transport {
 		spec: RequestSpec,
 		options: RequestOptions = {},
 	): Promise<T> {
+		// A signed URL carries its own authorization. Each other call needs the
+		// token, so fail here, before the send.
+		if (spec.signedUrl === undefined && this.#token === undefined) {
+			throw new TypeError(
+				"The client has no API token. Give `token` to the client. Only `forms.submit()` works without a token.",
+			);
+		}
+
 		const url = this.#url(spec);
 		const init = this.#init(spec);
 		const maxRetries = options.maxRetries ?? this.#maxRetries;
@@ -190,7 +204,7 @@ export class Transport {
 	}
 
 	#url(spec: RequestSpec): string {
-		const url = new URL(this.#apiRoot + spec.path);
+		const url = new URL(spec.signedUrl ?? this.#apiRoot + spec.path);
 
 		if (spec.query !== undefined) {
 			appendQuery(url.searchParams, spec.query);
@@ -203,8 +217,11 @@ export class Transport {
 		const headers: Record<string, string> = {
 			accept:
 				spec.text === true ? "text/html, application/json" : "application/json",
-			authorization: `Bearer ${this.#token}`,
 		};
+
+		if (spec.signedUrl === undefined) {
+			headers.authorization = `Bearer ${this.#token}`;
+		}
 
 		if (spec.form !== undefined) {
 			return { method: spec.method, headers, body: spec.form };

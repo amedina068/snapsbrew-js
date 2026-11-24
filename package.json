@@ -15,6 +15,7 @@
 		"url": "git+https://github.com/amedina068/snapsbrew-js.git"
 	},
 	"bugs": "https://github.com/amedina068/snapsbrew-js/issues",
+	"license": "MIT",
 	"type": "module",
 	"exports": {
 		".": {

@@ -17,9 +17,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
 - `SnapErrorCode` type for `Snap.last_error`: `render_failed`, `webhook_redirect_refused`, `webhook_unreachable` and `webhook_http_<status>`.
 - The `prepare` script builds the package, so `npm install github:amedina068/snapsbrew-js` installs a working package.
 - The README has a link to the SDK documentation, a webhook section and the install from git.
+- `sb.forms.submit(url, layers)` sends the layers of an embedded form to its signed submit URL, as in the Ruby SDK. A string is text. A `Blob` or a `File` is an image. It sends no token. A template form returns one snap. A collection form returns a list of snaps. A 429 throws a `RateLimitError` with the `apiCode` `rate_limited`, and the SDK retries it. The SDK does not retry a 5xx.
+- `token` is optional, the same as in the PHP and Ruby SDKs. A client with no token can call `forms.submit()`. Each other call throws a `TypeError` before the send. An empty token no longer throws in the constructor.
+- `WebhookVerificationError.reason` can be `payload`: the signature is valid, but the body is not a JSON object.
+- The webhook vectors have the expected `reason` of each invalid case and the `delivery_id` of each valid case.
+- The package is under the MIT License. `package.json` has `"license": "MIT"`.
 
 ### Changed
 
+- Breaking: a webhook with no `X-Snapsbrew-Delivery` header passes the verification. `deliveryId` is then `null`, so its type is `string | null`. The reason `delivery` is removed. Older instances do not send the header.
+- `verifyWebhook()` throws the reason `payload` for a body that is not a JSON object. It was a `SyntaxError` for invalid JSON.
+- `verifyWebhook()` treats an empty header as a missing header, and trims each header value.
+- The README lists the idempotent calls of the shared list. `templates.setTags()` is in the list, the same as in the code.
 - `Snap.last_error` is `SnapErrorCode | null`, not `string | null`. `BatchItem.last_error` is `"render_failed" | null`.
 - `templates.create()` accepts `groups: null`, the same as `templates.update()`.
 - The README and the comments do not say that a render costs a credit. The server keeps a usage log with no balance.

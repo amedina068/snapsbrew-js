@@ -17,6 +17,20 @@ if (first === undefined) {
 	throw new Error("The webhook vectors have no case.");
 }
 
+async function hmacHex(message: string): Promise<string> {
+	const encoder = new TextEncoder();
+	const key = await crypto.subtle.importKey(
+		"raw",
+		encoder.encode(vectors.secret),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+
+	return Buffer.from(digest).toString("hex");
+}
+
 async function failureOf(promise: Promise<unknown>): Promise<unknown> {
 	return promise.then(
 		() => {
@@ -37,7 +51,7 @@ describe("verifyWebhook() with the shared vectors", () => {
 			});
 
 			expect(verified).toEqual({
-				deliveryId: vector.headers["X-Snapsbrew-Delivery"],
+				deliveryId: vector.delivery_id,
 				timestamp: Number(vector.headers["X-Snapsbrew-Timestamp"]),
 				payload: JSON.parse(vector.body),
 			});
@@ -58,7 +72,7 @@ describe("verifyWebhook() with the shared vectors", () => {
 			expect(error).toBeInstanceOf(WebhookVerificationError);
 			expect(error).toMatchObject({
 				code: "webhook_verification_error",
-				reason: "signature",
+				reason: vector.reason,
 			});
 			expect(isSnapsbrewError(error)).toBe(true);
 		});
@@ -93,7 +107,7 @@ describe("verifyWebhook() inputs", () => {
 
 	it("accepts the lowercase header object of Node.js", async () => {
 		const headers = {
-			"x-snapsbrew-delivery": [first.headers["X-Snapsbrew-Delivery"]],
+			"x-snapsbrew-delivery": [String(first.headers["X-Snapsbrew-Delivery"])],
 			"x-snapsbrew-timestamp": first.headers["X-Snapsbrew-Timestamp"],
 			"x-snapsbrew-signature": first.headers["X-Snapsbrew-Signature"],
 			"content-type": "application/json",
@@ -118,7 +132,6 @@ describe("verifyWebhook() inputs", () => {
 		const cases = [
 			["X-Snapsbrew-Signature", "signature"],
 			["X-Snapsbrew-Timestamp", "timestamp"],
-			["X-Snapsbrew-Delivery", "delivery"],
 		] as const;
 
 		for (const [name, reason] of cases) {
@@ -129,6 +142,35 @@ describe("verifyWebhook() inputs", () => {
 
 			expect(error).toBeInstanceOf(WebhookVerificationError);
 			expect(error).toMatchObject({ reason });
+		}
+	});
+
+	it("gives a null delivery ID when the delivery header is missing", async () => {
+		const headers: Record<string, string> = { ...first.headers };
+		delete headers["X-Snapsbrew-Delivery"];
+
+		await expect(verifyWebhook({ ...options, headers })).resolves.toMatchObject(
+			{ deliveryId: null },
+		);
+	});
+
+	it("refuses a signed body that is not a JSON object", async () => {
+		const timestamp = String(vectors.now);
+
+		for (const body of ["{", "[]", '"text"', "null"]) {
+			const signature = await hmacHex(`${timestamp}.${body}`);
+			const error = await failureOf(
+				verifyWebhook({
+					...options,
+					body,
+					headers: {
+						"X-Snapsbrew-Timestamp": timestamp,
+						"X-Snapsbrew-Signature": signature,
+					},
+				}),
+			);
+
+			expect(error).toMatchObject({ reason: "payload" });
 		}
 	});
 

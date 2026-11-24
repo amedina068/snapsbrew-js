@@ -209,11 +209,11 @@ export class TimeoutError extends SnapsbrewError {
 }
 
 /** The reason that `verifyWebhook()` refused a request. */
-export type WebhookFailureReason = "signature" | "timestamp" | "delivery";
+/** The same three reasons as in the PHP, Python and Ruby SDKs. */
+export type WebhookFailureReason = "signature" | "timestamp" | "payload";
 
 /**
- * `verifyWebhook()` refused a request: the signature does not match, the
- * timestamp is too old or too new, or a header is missing. Answer the
+ * `verifyWebhook()` refused a request. Read `reason` to learn why. Answer the
  * request with a 400.
  */
 export class WebhookVerificationError extends SnapsbrewError {
@@ -221,8 +221,9 @@ export class WebhookVerificationError extends SnapsbrewError {
 	override name = "WebhookVerificationError";
 	/**
 	 * `signature`: the signature is missing or does not match.
-	 * `timestamp`: the timestamp is missing, or it is outside the tolerance.
-	 * `delivery`: the delivery ID is missing.
+	 * `timestamp`: the timestamp is missing, is not Unix seconds, or is
+	 * outside the tolerance.
+	 * `payload`: the signature is valid, but the body is not a JSON object.
 	 */
 	readonly reason: WebhookFailureReason;
 

@@ -21,6 +21,7 @@ export {
 	WebhookVerificationError,
 } from "./errors";
 export { PagePromise } from "./pagination";
+export type { FormLayerValue, Forms } from "./resources/forms";
 export type {
 	AccountResource,
 	CreateScreenshotParams,

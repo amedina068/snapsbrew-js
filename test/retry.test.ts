@@ -258,6 +258,53 @@ describe("retries of a request that is not idempotent", () => {
 	});
 });
 
+describe("the idempotent list", () => {
+	const templateId = "044ec825-ee2f-4d06-bb77-98663e27f529";
+
+	it("retries a template delete after a server error", async () => {
+		const fetch = mockFetch(json(503, {}), json(200, { message: "Deleted" }));
+
+		await settle(client(fetch).templates.delete(templateId));
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it("retries setTags() after a server error", async () => {
+		const fetch = mockFetch(json(502, {}), json(200, { tags: [] }));
+
+		expect(
+			await settle(client(fetch).templates.setTags(templateId, [])),
+		).toEqual([]);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not retry a template update after a server error", async () => {
+		const fetch = mockFetch(json(500, {}), json(200, { data: {} }));
+
+		const error = await settle(
+			client(fetch).templates.update(templateId, { title: "Card" }),
+		);
+
+		expect(error).toBeInstanceOf(ServerError);
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not retry a document replace after a timeout", async () => {
+		const fetch = mockFetch(json(200, {}));
+		hangOnce(fetch);
+
+		const error = await settle(
+			client(fetch, { timeout: 1000 }).documents.replace(templateId, {
+				revision: 4,
+				document: { version: 2, layers: [], groups: [] },
+			}),
+		);
+
+		expect(error).toBeInstanceOf(TimeoutError);
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("409 idempotency conflicts", () => {
 	const params = {
 		templateId: "t-1",

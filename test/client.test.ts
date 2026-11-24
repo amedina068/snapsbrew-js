@@ -15,13 +15,23 @@ afterEach(() => {
 });
 
 describe("constructor", () => {
-	it("rejects a missing token", () => {
-		expect(
-			() => new Snapsbrew({ baseUrl: "https://x.test", token: "" }),
-		).toThrow(/token/);
+	it("accepts a client with no token", () => {
+		expect(() => new Snapsbrew({ baseUrl: "https://x.test" })).not.toThrow();
 		expect(
 			() => new Snapsbrew({ baseUrl: "https://x.test", token: "  " }),
-		).toThrow(/token/);
+		).not.toThrow();
+	});
+
+	it("fails an API call with no token before the send", async () => {
+		for (const token of [undefined, "", "  "]) {
+			const fetch = mockFetch(json(200, { data: {} }));
+			const sb = new Snapsbrew({ baseUrl: "https://x.test", token, fetch });
+
+			await expect(sb.account.get()).rejects.toThrow(
+				/The client has no API token/,
+			);
+			expect(fetch).not.toHaveBeenCalled();
+		}
 	});
 
 	it("rejects a base URL that is not absolute", () => {

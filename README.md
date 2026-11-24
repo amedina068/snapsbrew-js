@@ -22,6 +22,7 @@ Read the Snapsbrew SDK documentation at [snapsbrew.com/docs/sdks/overview](https
 - [Cancel a call](#cancel-a-call)
 - [Framework integration](#framework-integration)
 - [Supported runtimes](#supported-runtimes)
+- [License](#license)
 
 ## Install
 
@@ -71,7 +72,7 @@ A variant names a layer key and sets one property. Get the layer keys of a templ
 | Option       | Type                               | Default        | Description                                                                                                           |
 | ------------ | ---------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `baseUrl`    | `string \| URL`                    | (required)     | The root URL of your instance. The SDK adds `/api`. Each user runs their own instance, so the SDK has no default URL. |
-| `token`      | `string`                           | (required)     | An API token with the `api_requests` ability. The SDK sends it as `Authorization: Bearer`.                            |
+| `token`      | `string`                           | (none)         | An API token with the `api_requests` ability. The SDK sends it as `Authorization: Bearer`. Each API call needs it.    |
 | `timeout`    | `number`                           | `60000`        | The time limit for one attempt, in milliseconds.                                                                      |
 | `maxRetries` | `number`                           | `2`            | The maximum number of retries after the first attempt. Use `0` to stop retries.                                       |
 | `fetch`      | `(url, init) => Promise<Response>` | global `fetch` | A `fetch` function for tests or a proxy.                                                                              |
@@ -79,6 +80,8 @@ A variant names a layer key and sets one property. Get the layer keys of a templ
 Each method also accepts `{ signal, timeout, maxRetries }` as its last argument. These values replace the client values for that call.
 
 Keep the token on the server. Do not put the token in a browser bundle.
+
+Only `forms.submit()` works without a token. If the client has no token, each other call throws a `TypeError` before it sends the request.
 
 ## Resources
 
@@ -93,12 +96,30 @@ Keep the token on the server. Do not put the token in a browser bundle.
 | `sb.media`       | `list()`, `upload()`                                                                                                      | `/v1/media`                     |
 | `sb.tags`        | `list()`, `create()`                                                                                                      | `/v1/tags`                      |
 | `sb.guides`      | `design()`, `layers()`, `variantProperties()`, `editorDocument()`, `platforms()`, `platform()`, `purposes()`, `purpose()` | `/v1/guides`                    |
+| `sb.forms`       | `submit()`                                                                                                                | `/v1/embedded-forms/{uuid}`     |
 
 The response types keep the field names of the API (`media_url`, `created_at`). The request parameters use camelCase (`templateId`, `webhookUrl`).
 
 Snaps render the published version of a template. After you change a template, call `sb.templates.publish(uuid)`.
 
 `sb.templates.delete(uuid)` also deletes the snaps, images, versions and forms of the template.
+
+### Embedded forms
+
+An embedded form renders a snap from the values that a visitor sends. The form renders on the account of its owner, so the SDK sends no token to the submit URL. A client with no token can submit a form. Copy the submit URL of the form from your instance. The URL carries its own signature.
+
+```ts
+const snap = await sb.forms.submit(submitUrl, {
+	headline: "Hello",
+	photo: file,
+});
+```
+
+- A string is text. A `Blob` or a `File` is an image.
+- A template form uses the layer key, for example `headline`. A collection form uses `{template uuid}__{layer key}` and returns a list of snaps.
+- If the signature is not valid, or the form does not exist, `submit()` throws a `NotFoundError`.
+- If one IP address or one form sends too many submissions in one minute, `submit()` throws a `RateLimitError` with the `apiCode` `rate_limited`. The SDK retries it.
+- The SDK does not retry a submit after a 5xx, because each submit renders a snap.
 
 ### Template groups
 
@@ -267,15 +288,21 @@ Use the raw request body. Do not parse the JSON and encode it again. The server 
 
 The result has these fields:
 
-- `deliveryId`: the value of `X-Snapsbrew-Delivery`. Each attempt of one delivery has the same ID. Store the ID, and ignore a webhook with an ID that you know.
+- `deliveryId`: the value of `X-Snapsbrew-Delivery`. Each attempt of one delivery has the same ID. Store the ID, and ignore a webhook with an ID that you know. An older instance sends no delivery header. Then the verification passes, and `deliveryId` is `null`.
 - `timestamp`: the value of `X-Snapsbrew-Timestamp`, in Unix seconds.
 - `payload`: the decoded body. A `switch (payload.event)` narrows its type.
 
 The events are `snap.completed`, `snap.failed`, `snap-import.completed`, `snap-import.failed` and `snap-import.canceled`. A `snap.failed` payload has `status: "failed"`, `last_error: "render_failed"` and an empty `media_url`. A new server version can send a new event, so keep a `default` branch.
 
-If the webhook is not valid, `verifyWebhook()` throws a `WebhookVerificationError`. Its `reason` is `signature`, `timestamp` or `delivery`. Answer the request with a 400.
+If the webhook is not valid, `verifyWebhook()` throws a `WebhookVerificationError`. Answer the request with a 400. Its `reason` tells why. The PHP, Python and Ruby SDKs use the same three reasons:
 
-The signature is the lowercase hex HMAC-SHA256 of `{X-Snapsbrew-Timestamp}.{raw body}`, with the secret as the key. `verifyWebhook()` compares it in constant time.
+| `reason`    | Cause                                                                              |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `signature` | The signature header is missing, or the signature does not match the body.         |
+| `timestamp` | The timestamp header is missing, is not Unix seconds, or is outside the tolerance. |
+| `payload`   | The signature is valid, but the body is not a JSON object.                         |
+
+The signature is the lowercase hex HMAC-SHA256 of `{X-Snapsbrew-Timestamp}.{raw body}`, with the secret as the key. `verifyWebhook()` changes the received signature to lowercase, then compares it in constant time.
 
 ## Errors
 
@@ -374,16 +401,24 @@ If you abort a call with your own `AbortSignal`, the SDK throws the reason of th
 
 ## Retries
 
-The SDK retries a failed call up to `maxRetries` times. The delay doubles on each attempt: 0.5, 1, 2, 4 and 8 seconds at most. Half of each delay is random (jitter). If the server sends `Retry-After`, the SDK waits that time. If `Retry-After` is more than 60 seconds, the SDK does not retry and throws a `RateLimitError`.
+The SDK retries a failed call up to `maxRetries` times (2 by default). The delay doubles on each attempt: 0.5, 1, 2, 4 and 8 seconds at most. Half of each delay is random (jitter). If the server sends `Retry-After`, the SDK waits that time. If `Retry-After` is more than 60 seconds, the SDK does not retry and throws the error. The PHP, Python and Ruby SDKs use the same rules.
 
-| Failure                           | Retry of GET, PUT, DELETE | Retry of POST, PATCH                                         |
-| --------------------------------- | ------------------------- | ------------------------------------------------------------ |
-| 429                               | Yes                       | Yes. The server rejected the request before it did the work. |
-| 409 `idempotency_key_in_progress` | Not applicable            | Only with an `idempotencyKey`. The server created nothing.   |
-| 5xx                               | Yes                       | Only with an `idempotencyKey`                                |
-| Timeout                           | Yes                       | Only with an `idempotencyKey`                                |
-| Connection refused, DNS error     | Yes                       | Yes. The server did not get the request.                     |
-| Other connection error            | Yes                       | Only with an `idempotencyKey`                                |
+| Failure                           | Idempotent call                                            | Other call                                                   |
+| --------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
+| 429                               | Yes                                                        | Yes. The server rejected the request before it did the work. |
+| 409 `idempotency_key_in_progress` | Only with an `idempotencyKey`. The server created nothing. | No                                                           |
+| 5xx                               | Yes                                                        | No                                                           |
+| Timeout                           | Yes                                                        | No                                                           |
+| Connection refused, DNS error     | Yes                                                        | Yes. The server did not get the request.                     |
+| Other connection error            | Yes                                                        | No                                                           |
+
+These calls are idempotent:
+
+- Each `GET` and `DELETE`, for example `templates.delete()`. After a lost response, a retried `templates.delete()` throws a `NotFoundError`, because the first request deleted the template.
+- `templates.publish()`, `templates.setTags()` and `batches.cancel()`. A repeat of these calls changes nothing.
+- `snaps.create()` and `batches.create()` with an `idempotencyKey`.
+
+The other calls are not idempotent: `templates.create()`, `templates.update()`, `snaps.create()` and `batches.create()` with no key, `screenshots.create()`, `media.upload()`, `tags.create()` and `forms.submit()`. A write to an editor document (`documents.replace()` and `documents.apply()`) is never retried after a 5xx or a timeout, because a repeat gets a conflict.
 
 A repeat of a render makes a second snap. To retry a render safely, send an idempotency key:
 
@@ -395,7 +430,7 @@ await sb.snaps.create({
 });
 ```
 
-The server keeps a key for 24 hours. A repeat with the same key returns the first snap and renders nothing. A key belongs to one kind of call. Do not use the key of a single snap for a batch, or the key of a batch for a single snap. The server rejects it with a 409, and the SDK does not retry it. The SDK also retries `batches.cancel()` and `templates.publish()`, because a repeat of these calls changes nothing. The SDK does not retry a write to an editor document, because a repeat gets a conflict.
+The server keeps a key for 24 hours. A repeat with the same key returns the first snap and renders nothing. A key belongs to one kind of call. Do not use the key of a single snap for a batch, or the key of a batch for a single snap. The server rejects it with a 409, and the SDK does not retry it.
 
 ### Rate limits
 
@@ -475,7 +510,11 @@ export async function POST(request: Request) {
 		throw error;
 	}
 
-	if (await alreadyHandled(webhook.deliveryId)) {
+	// `deliveryId` is null when an older instance sends no delivery header.
+	if (
+		webhook.deliveryId !== null &&
+		(await alreadyHandled(webhook.deliveryId))
+	) {
 		return new Response(null, { status: 200 });
 	}
 
@@ -550,3 +589,7 @@ Node.js 20 is out of support since April 2026. The SDK still tests on it.
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, read [SECURITY.md](SECURITY.md).
+
+## License
+
+The package is available under the [MIT License](LICENSE).
