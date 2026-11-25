@@ -4,7 +4,9 @@ All notable changes to this project are in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - Unreleased
+## [Unreleased]
+
+## [0.2.0] - 2026-11-25
 
 ### Added
 
@@ -36,7 +38,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
 - The README says that a signed URL accepts each active key of the company of the template, and that `templates.delete()` also deletes the snaps, images, versions and forms of the template.
 - The Node.js 20 job of the CI installs with `--ignore-scripts`, because the build tools need Node.js 22.18.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - Not published
+
+Version 0.1.0 was not published. Release 0.2.0 contains these changes.
 
 ### Added
 
