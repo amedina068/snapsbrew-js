@@ -16,6 +16,8 @@
 	},
 	"bugs": "https://github.com/amedina068/snapsbrew-js/issues",
 	"license": "MIT",
+	"author": "Alejandro Medina (https://amedina.me)",
+	"homepage": "https://snapsbrew.com/docs/sdks/overview",
 	"type": "module",
 	"exports": {
 		".": {

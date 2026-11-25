@@ -5,3 +5,7 @@ coverage/
 .env
 .env.*
 .DS_Store
+
+# Internal notes of the maintainer
+BRIEF.md
+REPORT-*.md

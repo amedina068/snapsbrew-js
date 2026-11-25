@@ -1,5 +1,8 @@
 # snapsbrew
 
+[![CI](https://github.com/amedina068/snapsbrew-js/actions/workflows/ci.yml/badge.svg)](https://github.com/amedina068/snapsbrew-js/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 The TypeScript client for a self-hosted [Snapsbrew](https://snapsbrew.com) instance. Snapsbrew renders images ("snaps") from templates.
 
 One package runs on Node.js, Bun, Deno, Cloudflare Workers and other edge runtimes. The package has no runtime dependencies. It uses the global `fetch` and Web Crypto.
@@ -22,6 +25,8 @@ Read the Snapsbrew SDK documentation at [snapsbrew.com/docs/sdks/overview](https
 - [Cancel a call](#cancel-a-call)
 - [Framework integration](#framework-integration)
 - [Supported runtimes](#supported-runtimes)
+- [Related projects](#related-projects)
+- [Community](#community)
 - [License](#license)
 
 ## Install
@@ -31,8 +36,6 @@ The package is not on npm yet. Install it from the GitHub repository:
 ```sh
 npm install github:amedina068/snapsbrew-js
 ```
-
-The repository is private. Your git client must have access to it, for example through SSH keys or `gh auth login`.
 
 The `prepare` script builds the package during the install. The build tools need Node.js 22.18 or later. The built package runs on Node.js 20.
 
@@ -586,10 +589,22 @@ The package ships ESM (`dist/index.js`) and CommonJS (`dist/index.cjs`), with ty
 
 Node.js 20 is out of support since April 2026. The SDK still tests on it.
 
-## Contributing
+## Related projects
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, read [SECURITY.md](SECURITY.md).
+- [Snapsbrew](https://github.com/amedina068/snapsbrew): the self-hosted app that this SDK calls. It uses the AGPL-3.0.
+- [Documentation](https://snapsbrew.com/docs): the guides for the app and the SDKs. The source is in [snapsbrew-docs](https://github.com/amedina068/snapsbrew-docs).
+- [SDK overview](https://snapsbrew.com/docs/sdks/overview): the install steps and the features of each SDK.
+- SDKs for other languages: [PHP](https://github.com/amedina068/snapsbrew-php), [Python](https://github.com/amedina068/snapsbrew-python), [Ruby](https://github.com/amedina068/snapsbrew-ruby).
+
+## Community
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to set up the code and open a pull request.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): the rules for issues, pull requests, and reviews.
+- [SECURITY.md](SECURITY.md): how to report a security problem in private.
+- [CHANGELOG.md](CHANGELOG.md): the changes in each version.
+
+Report a problem with the SDK in the issues of this repository. Report a problem with the app in the [Snapsbrew issues](https://github.com/amedina068/snapsbrew/issues).
 
 ## License
 
-The package is available under the [MIT License](LICENSE).
+This SDK is available under the [MIT License](LICENSE). You can use it in closed source code. The Snapsbrew app uses the AGPL-3.0. That license does not cover this SDK.
