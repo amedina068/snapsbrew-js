@@ -38,7 +38,7 @@ The package is not on npm yet. Install it from the GitHub repository:
 npm install github:amedina068/snapsbrew-js
 ```
 
-The `prepare` script builds the package during the install. The build tools need Node.js 22.18 or later. The built package runs on Node.js 20.
+The `prepare` script builds the package during the install. The build tools need Node.js 22.18 or later. The built package runs on Node.js 22.12 or later.
 
 For Bun, use `bun add github:amedina068/snapsbrew-js`.
 
@@ -579,16 +579,16 @@ const sb = new Snapsbrew({
 
 ## Supported runtimes
 
-| Runtime            | Version              | Test in CI                                            |
-| ------------------ | -------------------- | ----------------------------------------------------- |
-| Node.js            | 20, 22, 24 and later | Unit tests and smoke test                             |
-| Bun                | 1.x                  | Smoke test                                            |
-| Deno               | 2.x                  | Smoke test                                            |
-| Cloudflare Workers | Current              | None. The SDK uses only Web APIs that Workers supply. |
+| Runtime            | Version         | Test in CI                                            |
+| ------------------ | --------------- | ----------------------------------------------------- |
+| Node.js            | 22.12 and later | Unit tests and smoke test on Node.js 22 and 24        |
+| Bun                | 1.x             | Smoke test                                            |
+| Deno               | 2.x             | Smoke test                                            |
+| Cloudflare Workers | Current         | None. The SDK uses only Web APIs that Workers supply. |
 
 The package ships ESM (`dist/index.js`) and CommonJS (`dist/index.cjs`), with types for both.
 
-Node.js 20 is out of support since April 2026. The SDK still tests on it.
+The SDK requires Node.js 22.12 or later. Node.js 20 reached end of life in April 2026. The SDK does not support it.
 
 ## Related projects
 

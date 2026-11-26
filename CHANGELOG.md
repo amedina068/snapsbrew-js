@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: Node.js 22.12 or later is required. Node.js 20 reached end of life in April 2026.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added
