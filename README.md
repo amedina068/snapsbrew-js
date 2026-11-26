@@ -579,12 +579,12 @@ const sb = new Snapsbrew({
 
 ## Supported runtimes
 
-| Runtime            | Version              | Test in CI                                            |
-| ------------------ | -------------------- | ----------------------------------------------------- |
-| Node.js            | 22.12 and later      | Unit tests and smoke test on Node.js 22 and 24        |
-| Bun                | 1.x                  | Smoke test                                            |
-| Deno               | 2.x                  | Smoke test                                            |
-| Cloudflare Workers | Current              | None. The SDK uses only Web APIs that Workers supply. |
+| Runtime            | Version         | Test in CI                                            |
+| ------------------ | --------------- | ----------------------------------------------------- |
+| Node.js            | 22.12 and later | Unit tests and smoke test on Node.js 22 and 24        |
+| Bun                | 1.x             | Smoke test                                            |
+| Deno               | 2.x             | Smoke test                                            |
+| Cloudflare Workers | Current         | None. The SDK uses only Web APIs that Workers supply. |
 
 The package ships ESM (`dist/index.js`) and CommonJS (`dist/index.cjs`), with types for both.
 
