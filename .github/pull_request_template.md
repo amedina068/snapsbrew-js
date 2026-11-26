@@ -10,3 +10,4 @@ Describe what this pull request changes and why.
 - [ ] The change adds no runtime dependency and no Node.js import in `src/`.
 - [ ] The text is in Simple English (see `CONTRIBUTING.md`).
 - [ ] The change contains no token, key or other secret.
+- [ ] The PR title follows Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:` and similar).

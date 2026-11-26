@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/amedina068/snapsbrew-js/actions/workflows/ci.yml/badge.svg)](https://github.com/amedina068/snapsbrew-js/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/amedina068/snapsbrew-js/badge)](https://scorecard.dev/viewer/?uri=github.com/amedina068/snapsbrew-js)
 
 The TypeScript client for a self-hosted [Snapsbrew](https://snapsbrew.com) instance. Snapsbrew renders images ("snaps") from templates.
 
