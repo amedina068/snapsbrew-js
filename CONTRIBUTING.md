@@ -4,7 +4,7 @@ Thank you for your help. This file tells you how to set up the project and how t
 
 ## Set up
 
-1. Install Node.js 22.18 or later. The build tools need Node.js 22.18. The package itself runs on Node.js 20.
+1. Install Node.js 22.18 or later. The build tools need Node.js 22.18. The package itself runs on Node.js 22.12 or later.
 2. Clone the repository.
 3. Run `npm ci`. The `prepare` script builds `dist/`.
 

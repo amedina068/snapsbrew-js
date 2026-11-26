@@ -40,7 +40,7 @@
 	],
 	"sideEffects": false,
 	"engines": {
-		"node": ">=20"
+		"node": ">=22.12"
 	},
 	"scripts": {
 		"build": "tsdown",
@@ -59,10 +59,10 @@
 	"devDependencies": {
 		"@arethetypeswrong/cli": "^0.18.5",
 		"@biomejs/biome": "^2.6.8",
-		"@types/node": "^26.6.6",
+		"@types/node": "^22.20.7",
 		"publint": "^0.3.25",
 		"tsdown": "^0.23.7",
 		"typescript": "^7.0.2",
-		"vitest": "^4.1.12"
+		"vitest": "^5.1.2"
 	}
 }
