@@ -1,10 +1,12 @@
-# Publishes the package to npm. This workflow runs only when a maintainer
-# starts it by hand. It does not run on a push or a tag.
+# Publishes the package to npm with trusted publishing (OIDC). The job
+# gets a short-lived token from GitHub. The repository has no npm secret.
+# This workflow runs only when a maintainer starts it by hand. It does not
+# run on a push or a tag.
 #
 # Before the first release:
-# 1. Choose a license, add the LICENSE file and set `license` in package.json.
-# 2. Add the repository secret NPM_TOKEN (an npm automation token).
-# 3. Start this workflow from the Actions tab. Leave "dry-run" on for a test.
+# 1. On npmjs.com, add a trusted publisher to the package: owner amedina068,
+#    repository snapsbrew-js, workflow release.yml, environment npm.
+# 2. Start this workflow from the Actions tab. Leave "dry-run" on for a test.
 name: Release
 
 on:
@@ -17,7 +19,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # trusted publishing and provenance
 
 jobs:
   publish:
@@ -30,6 +32,9 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm CLI 11.5.1 or later.
+      - name: Install npm 11.21.2
+        run: npm install --global npm@11.21.2
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -40,5 +45,3 @@ jobs:
         run: node -e "if (!require('./package.json').license) { console.error('Set a license in package.json first.'); process.exit(1) }"
       - name: Publish
         run: npm publish --provenance --access public ${{ inputs.dry-run && '--dry-run' || '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
